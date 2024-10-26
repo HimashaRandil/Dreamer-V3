@@ -22,3 +22,9 @@ class Decoder(nn.Module):
     def forward(self, x):
         actual = self.decoder(x)
         return actual
+    
+    def save(self, model_name="decoder"):
+        torch.save(self.state_dict(), os.path.join(self.config.path, model_name))
+
+    def load(self, model_name="decoder"):
+        self.load_state_dict(torch.load(os.path.join(self.config.path, model_name)))
