@@ -7,7 +7,7 @@ import os
 
 class Decoder(nn.Module):
     def __init__(self, config):
-        super().__init__()
+        super(Decoder, self).__init__()
         self.config = config
 
         self.decoder = nn.Sequential(

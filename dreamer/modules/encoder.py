@@ -7,7 +7,7 @@ import os
 
 class Encoder(nn.Module):
     def __init__(self, config):
-        super().__init__()
+        super(Encoder, self).__init__()
         self.config = config
 
         self.encoder = nn.Sequential(
