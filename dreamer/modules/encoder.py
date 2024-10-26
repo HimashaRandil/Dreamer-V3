@@ -21,3 +21,10 @@ class Encoder(nn.Module):
     def forward(self, x):
         latent = self.encoder(x)
         return latent
+    
+
+    def save(self, model_name="encoder"):
+        torch.save(self.state_dict(), os.path.join(self.config.path, model_name))
+
+    def load(self, model_name="encoder"):
+        self.load_state_dict(torch.load(os.path.join(self.config.path, model_name)))
