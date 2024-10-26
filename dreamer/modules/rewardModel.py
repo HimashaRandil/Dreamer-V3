@@ -3,11 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from torch.distributions import Normal
-
+import os
 
 class RewardPredictor(nn.Module):
     def __init__(self, config):
-        super().__init__()
+        super(RewardPredictor, self).__init__()
 
         self.config = config
         self.network = nn.Sequential(
@@ -34,3 +34,9 @@ class RewardPredictor(nn.Module):
         dist = Normal(mean, std)
         
         return dist
+    
+    def save(self, model_name="reward_predictor"):
+        torch.save(self.state_dict(), os.path.join(self.config.path, model_name))
+
+    def load(self, model_name="reward_predictor"):
+        self.load_state_dict(torch.load(os.path.join(self.config.path, model_name)))
