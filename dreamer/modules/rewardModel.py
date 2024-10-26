@@ -5,6 +5,11 @@ import numpy as np
 from torch.distributions import Normal
 import os
 
+
+"""
+    Try two-hot encoding for reward prediction 
+"""
+
 class RewardPredictor(nn.Module):
     def __init__(self, config):
         super(RewardPredictor, self).__init__()
