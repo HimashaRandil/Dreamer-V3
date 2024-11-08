@@ -9,13 +9,16 @@ class Encoder(nn.Module):
     def __init__(self, config):
         super(Encoder, self).__init__()
         self.config = config
+        input_dim = self.config.input_dim
 
         self.encoder = nn.Sequential(
-            nn.Linear(self.config.input_dim, 256),
+            nn.Linear(input_dim, input_dim//2),
             nn.ReLU(),
-            nn.Linear(256, 128),
+            nn.Linear(input_dim//2, input_dim//4),
             nn.ReLU(),
-            nn.Linear(128, self.config.latent_dim)  # Outputs to the latent space
+            nn.Linear(input_dim//4, input_dim//8),
+            nn.ReLU(),
+            nn.Linear(input_dim//8, self.config.latent_dim)  # Outputs to the latent space
         )
 
     def forward(self, x):
