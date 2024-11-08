@@ -189,6 +189,26 @@ class DataGeneration:
             substation_connections[extremity_substation] += 1
 
         return substation_connections
+    
+
+
+    def find_most_connected_substations(substation_connections, top_n=5):
+        """
+        Finds the top N substations with the highest number of powerline connections.
+
+        Parameters:
+        - substation_connections: Dictionary with substation ID as key and connection count as value
+        - top_n: Number of top substations to return
+
+        Returns:
+        - List of tuples (substation_id, connection_count) sorted by connection count in descending order
+        """
+        # Sort substations by the number of connections in descending order
+        sorted_substations = sorted(substation_connections.items(), key=lambda x: x[1], reverse=True)
+        
+        return sorted_substations[:top_n]
+
+
 
 
     def find_powerlines_connected_to_substations(env, target_substations):
