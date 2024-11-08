@@ -9,6 +9,7 @@ from dreamer.Utils.converter import ActionConverter
 from grid2op.Agent import TopologyGreedy
 from grid2op.Reward import L2RPNSandBoxScore
 from grid2op.Exceptions import *
+import time
 
 class DataGeneration:
     def __init__(self, config) -> None:
@@ -88,7 +89,7 @@ class DataGeneration:
         steps_data = np.array(steps, dtype=int)
 
         # Save to .npz file
-        np.savez("data_generation_output.npz", obs=obs_data, action=action_data, 
+        np.savez("dreamer\\data_generation\\data_generation_output.npz", obs=obs_data, action=action_data, 
                  obs_next=obs_next_data, reward=reward_data, done=done_data, steps=steps_data)
             
 
@@ -130,5 +131,27 @@ class DataGeneration:
         done_data = np.array(done_data, dtype=bool)
 
         # Save to .npz file
-        np.savez("data_generation_output.npz", obs=obs_data, action=action_data, 
+        np.savez("dreamer\\data_generation\\data_generation_output.npz", obs=obs_data, action=action_data, 
                  obs_next=obs_next_data, reward=reward_data, done=done_data)
+        
+
+
+    def topology_search(self, dst_step):
+        obs = self.env.get_obs()
+        min_rho, overflow_id = obs.rho.max(), obs.rho.argmax()
+        print("step-%s, line-%s(from bus-%d to bus-%d) overflows, max rho is %.5f" %
+            (dst_step, overflow_id, self.env.line_or_to_subid[overflow_id],
+            self.env.line_ex_to_subid[overflow_id], obs.rho.max()))
+        all_actions = self.env.action_space.get_all_unitary_topologies_change(self.env.action_space)
+        action_chosen = self.env.action_space({})
+        tick = time.time()
+        for action in all_actions:
+            if not self.env._game_rules(action, self.env):
+                continue
+            obs_, _, done, _ = obs.simulate(action)
+            if (not done) and (obs_.rho.max() < min_rho):
+                min_rho = obs_.rho.max()
+                action_chosen = action
+        print("find a greedy action and max rho decreases to %.5f, search duration: %.2f" %
+            (min_rho, time.time() - tick))
+        return action_chosen
