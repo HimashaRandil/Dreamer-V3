@@ -135,7 +135,7 @@ class DataGeneration:
         done_data = np.array(done_data, dtype=bool)
 
         # Save to .npz file
-        np.savez("dreamer\\data_generation\\data_generation_output.npz", obs=obs_data, action=action_data, 
+        np.savez("dreamer\\data_generation\\random_data_generation_output.npz", obs=obs_data, action=action_data, 
                  obs_next=obs_next_data, reward=reward_data, done=done_data)
         
 
@@ -246,9 +246,30 @@ class DataGeneration:
     def teacher_generation(self):
         DATA_PATH = f'C:\\Users\\Ernest\\data_grid2op\\{self.config.env_name}'  # for demo only, use your own dataset
         SCENARIO_PATH = f'C:\\Users\\Ernest\\data_grid2op\\{self.config.env_name}'
-        SAVE_PATH = 'dreamer\\data_generation'
-        LINES2ATTACK = [0, 1, 5, 7, 9, 16, 17, 4, 9, 13, 14, 18]
+        #LINES2ATTACK = [0, 1, 5, 7, 9, 16, 17, 4, 9, 13, 14, 18]
+        substation_connections = self.get_substation_connections(env)
+        top_substations = self.find_most_connected_substations(substation_connections, top_n=30)
+        target_substations = [item[0] for item in top_substations]
+
+        LINES2ATTACK = []
+        # Find powerlines connected to the target substations
+        result = self.find_powerlines_connected_to_substations(env, target_substations)
+
+        # Print the result
+        for substation, lines in result.items():
+            for i in lines:
+                LINES2ATTACK.append(i)
+            #print(f"Substation {substation} is connected to powerlines: {lines}")
+        
+
         NUM_EPISODES = 1  # each scenario runs 100 times for each attack (or to say, sample 100 points)
+
+        obs_list = []
+        reward_list = []
+        next_obs_list = []
+        done_list = []
+        action_list = []
+
 
         for episode in range(NUM_EPISODES):
             # traverse all attacks
@@ -285,3 +306,22 @@ class DataGeneration:
                         # search a greedy action
                         action = self.topology_search(env)
                         obs_, reward, done, _ = env.step(action)
+
+                        action_idx = self.action_converter.action_idx(action)
+
+                        obs_list.append(obs.to_vect())
+                        next_obs_list.append(obs_.to_vect())
+                        reward_list.append(reward)
+                        done_list.append(done)
+                        action_list.append(action_idx)
+        
+        # Convert lists to np.array
+        obs_data = np.array(obs_list, dtype=object)
+        action_data = np.array(action_list, dtype=int)
+        obs_next_data = np.array(next_obs_list, dtype=object)
+        reward_data = np.array(reward_list, dtype=float)
+        done_data = np.array(done_list, dtype=bool)
+
+        # Save to .npz file
+        np.savez("dreamer\\data_generation\\teacher_generation_output.npz", obs=obs_data, action=action_data, 
+                 obs_next=obs_next_data, reward=reward_data, done=done_data)
