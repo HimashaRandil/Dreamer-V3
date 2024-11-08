@@ -38,9 +38,6 @@ class DataGeneration:
             
 
             for i in range (self.env.max_episode_duration()):
-                print(i)
-
-
                 
                 action = self.agent.act(obs, reward, done) #self.agent.act() #
                 obs_, reward, done, _ = self.env.step(self.env.action_space({}))
@@ -48,7 +45,7 @@ class DataGeneration:
 
                 # Append data for this step
                 obs_data.append(obs.to_vect())
-                action_data.append(0)
+                action_data.append(action_idx)
                 obs_next_data.append(obs_.to_vect())
                 reward_data.append(reward)
                 done_data.append(done)
@@ -60,7 +57,6 @@ class DataGeneration:
                 
 
                 if done:
-                    print("done")
                     self.env.set_id(episode_id)
                     
                     obs = self.env.reset()
@@ -74,7 +70,7 @@ class DataGeneration:
                     action_idx = self.action_converter.action_idx(action)
 
                     obs_data.append(obs.to_vect())
-                    action_data.append(0)
+                    action_data.append(action_idx)
                     obs_next_data.append(obs_.to_vect())
                     reward_data.append(reward)
                     done_data.append(done)
@@ -82,8 +78,6 @@ class DataGeneration:
 
                     obs = obs_
                 
-            
-            break
 
         # Convert lists to np.array
         obs_data = np.array(obs_data, dtype=object)
@@ -95,15 +89,19 @@ class DataGeneration:
 
         # Save to .npz file
         np.savez("data_generation_output.npz", obs=obs_data, action=action_data, 
-                 obs_next=obs_next_data, reward=reward_data, done=done_data)
+                 obs_next=obs_next_data, reward=reward_data, done=done_data, steps=steps_data)
             
 
     
 
     def generate_random_data(self):
-        
+        obs_data = []
+        action_data = []
+        obs_next_data = []
+        reward_data = []
+        done_data = []
+
         for i in range(self.config.episode_num):
-            print(i)
             done = False
             reward = self.env.reward_range[0]
             obs = self.env.reset()
@@ -112,6 +110,14 @@ class DataGeneration:
                 action = self.agent.act(obs, reward, done)
                 obs_, reward, done, _ = self.env.step(action)
 
+                action_idx = self.action_converter.action_idx(action)
+
+                # Append data for this step
+                obs_data.append(obs.to_vect())
+                action_data.append(action_idx)
+                obs_next_data.append(obs_.to_vect())
+                reward_data.append(reward)
+                done_data.append(done)
 
                 if done:
                     print("break")
