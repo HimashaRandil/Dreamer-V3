@@ -26,3 +26,10 @@ class ContinuousPredictor(nn.Module):
 
         dist = torch.distributions.Bernoulli(logits=x)   #Bernoulli distribution is a natural choice for modeling binary events
         return dist
+    
+
+    def save(self, model_name="continue_predictor"):
+        torch.save(self.state_dict(), os.path.join(self.config.path, model_name))
+
+    def load(self, model_name="continue_predictor"):
+        self.load_state_dict(torch.load(os.path.join(self.config.path, model_name)))
