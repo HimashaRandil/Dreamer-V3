@@ -122,3 +122,13 @@ class DataGeneration:
                 if done:
                     print("break")
                     break
+        # Convert lists to np.array
+        obs_data = np.array(obs_data, dtype=object)
+        action_data = np.array(action_data, dtype=int)
+        obs_next_data = np.array(obs_next_data, dtype=object)
+        reward_data = np.array(reward_data, dtype=float)
+        done_data = np.array(done_data, dtype=bool)
+
+        # Save to .npz file
+        np.savez("data_generation_output.npz", obs=obs_data, action=action_data, 
+                 obs_next=obs_next_data, reward=reward_data, done=done_data)
