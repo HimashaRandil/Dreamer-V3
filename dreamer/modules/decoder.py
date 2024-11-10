@@ -10,15 +10,15 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.config = config
         latent_dim = self.config.latent_dim
+        hidden_dim = self.config.hidden_dim
+        input_dim = latent_dim + hidden_dim
 
         self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, latent_dim*2),
+            nn.Linear(input_dim, input_dim*2),
             nn.ReLU(),
-            nn.Linear(latent_dim*2, latent_dim*4),
+            nn.Linear(input_dim*2, input_dim*4),
             nn.ReLU(),
-            nn.Linear(latent_dim*4, latent_dim*8),
-            nn.ReLU(),
-            nn.Linear(latent_dim*8, self.config.input_dim)  # Outputs back to original input size
+            nn.Linear(input_dim*4, self.config.input_dim)  # Outputs back to original input size
         )
 
 
