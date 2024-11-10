@@ -26,8 +26,12 @@ class Encoder(nn.Module):
         )
 
     def forward(self, x):
-        latent = self.encoder(x)
-        return latent
+        latent_params = self.encoder(x)
+        mean, log_var = torch.chunk(latent_params, 2, dim=-1)
+        std = torch.exp(0.5 * log_var)
+        dist = torch.distributions.Normal(mean, std)
+        z = dist.rsample()  # rsample allows gradients to flow through the sample
+        return z, dist
     
 
     def save(self, model_name="encoder"):
