@@ -9,6 +9,7 @@ from dreamer.Utils.converter import ActionConverter
 from grid2op.Agent import TopologyGreedy
 from grid2op.Reward import L2RPNSandBoxScore
 from grid2op.Exceptions import *
+from dreamer.data_generation.agents import RandomTopologyAgent
 import time
 import random
 from collections import defaultdict
@@ -22,6 +23,7 @@ class DataGeneration:
         self.config = config
         self.action_converter = ActionConverter(self.env)
         self.agent = TopologyGreedy(self.env.action_space)
+        self.random_topology = RandomTopologyAgent(self.action_converter.actions)
         #self.agent = TopologyRandom(self.env)
 
     def topology_data_generation(self):
@@ -98,6 +100,79 @@ class DataGeneration:
             
 
     
+    
+    def random_topology_data_generation(self):
+        num_episodes = len(self.env.chronics_handler.subpaths)
+        
+        steps = []
+        obs_data = []
+        action_data = []
+        obs_next_data = []
+        reward_data = []
+        done_data = []
+
+        for episode_id in range(num_episodes):
+            print(f"Episode ID : {episode_id}")
+            self.env.set_id(episode_id)
+            obs = self.env.reset()
+            reward = self.env.reward_range[0]
+            done = False
+            
+
+            for i in range (self.env.max_episode_duration()):
+                
+                action = self.random_topology.act() #self.agent.act() #
+                obs_, reward, done, _ = self.env.step(self.env.action_space({}))
+                action_idx = self.action_converter.action_idx(action)
+
+                # Append data for this step
+                obs_data.append(obs.to_vect())
+                action_data.append(action_idx)
+                obs_next_data.append(obs_.to_vect())
+                reward_data.append(reward)
+                done_data.append(done)
+                steps.append(i)
+
+                # Update observation for the next step
+                obs = obs_
+
+                
+
+                if done:
+                    self.env.set_id(episode_id)
+                    
+                    obs = self.env.reset()
+                    done = False
+                    reward = self.env.reward_range[0]
+
+                    self.env.fast_forward_chronics(i - 1)
+                    
+                    action = self.random_topology.act()
+                    obs_, reward, done, _ = self.env.step(self.env.action_space({}))
+                    action_idx = self.action_converter.action_idx(action)
+
+                    obs_data.append(obs.to_vect())
+                    action_data.append(action_idx)
+                    obs_next_data.append(obs_.to_vect())
+                    reward_data.append(reward)
+                    done_data.append(done)
+                    steps.append(i)
+
+                    obs = obs_
+                
+
+        # Convert lists to np.array
+        obs_data = np.array(obs_data, dtype=object)
+        action_data = np.array(action_data, dtype=int)
+        obs_next_data = np.array(obs_next_data, dtype=object)
+        reward_data = np.array(reward_data, dtype=float)
+        done_data = np.array(done_data, dtype=bool)
+        steps_data = np.array(steps, dtype=int)
+
+        # Save to .npz file
+        np.savez("dreamer\\data_generation\\random_topo_data_generation_output.npz", obs=obs_data, action=action_data, 
+                 obs_next=obs_next_data, reward=reward_data, done=done_data, steps=steps_data)
+        
 
     def generate_random_data(self):
         obs_data = []
@@ -107,6 +182,7 @@ class DataGeneration:
         done_data = []
 
         for i in range(self.config.episode_num):
+            print(i)
             done = False
             reward = self.env.reward_range[0]
             obs = self.env.reset()
