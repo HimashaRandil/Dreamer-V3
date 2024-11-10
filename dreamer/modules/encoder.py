@@ -9,7 +9,9 @@ class Encoder(nn.Module):
     def __init__(self, config):
         super(Encoder, self).__init__()
         self.config = config
-        input_dim = self.config.input_dim
+        input_size = self.config.input_dim
+        hidden_dim = self.config.hidden_dim
+        input_dim = input_size + hidden_dim
 
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, input_dim//2),
@@ -18,7 +20,9 @@ class Encoder(nn.Module):
             nn.ReLU(),
             nn.Linear(input_dim//4, input_dim//8),
             nn.ReLU(),
-            nn.Linear(input_dim//8, self.config.latent_dim)  # Outputs to the latent space
+            nn.Linear(input_dim//8, input_dim//16),
+            nn.ReLU(),
+            nn.Linear(input_dim//16, self.config.latent_dim)  # Outputs to the latent space
         )
 
     def forward(self, x):
