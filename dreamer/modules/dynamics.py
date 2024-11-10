@@ -30,6 +30,10 @@ class DynamicPredictor(nn.Module):
         return dist
     
 
+    def input_init(self, batch_size):
+        return torch.zeros(batch_size, self.config.hidden_dim).to(self.device)
+    
+
     def save(self, model_name="dynamic_predictor"):
         torch.save(self.state_dict(), os.path.join(self.config.path, model_name))
 
