@@ -22,7 +22,8 @@ class Decoder(nn.Module):
         )
 
 
-    def forward(self, x):
+    def forward(self, z, h):
+        x = torch.cat((z, h), dim=-1)
         actual = self.decoder(x)
         return actual
     

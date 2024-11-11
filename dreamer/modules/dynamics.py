@@ -25,13 +25,13 @@ class DynamicPredictor(nn.Module):
     def forward(self, h_t):
         x = self.network(h_t)
         mean, log_std = torch.chunk(x, 2, dim=-1)
-        std = F.softplus(log_std) + 1e-6
+        std = F.softplus(log_std) #+ 1e-6
         dist = torch.distributions.Normal(mean, std)
         return dist
     
 
-    def input_init(self, batch_size):
-        return torch.zeros(batch_size, self.config.hidden_dim).to(self.device)
+    def input_init(self):
+        return torch.zeros(self.config.batch_size, self.config.hidden_dim).to(self.config.device)
     
 
     def save(self, model_name="dynamic_predictor"):
