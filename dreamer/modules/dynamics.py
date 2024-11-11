@@ -12,22 +12,19 @@ class DynamicPredictor(nn.Module):
 
         self.config = config
         h = self.config.hidden_dim
+
         self.network = nn.Sequential(
-            nn.Linear(h, h//2),
+            nn.Linear(h, h // 2),
             nn.ReLU(),
-            nn.Linear(h//2, h//4),
-            nn.ReLU(),
-            nn.Linear(h//4, h//8),
-            nn.ReLU(),
-            nn.Linear(h//8, self.config.latent_dim)  # Output mean and log-std for latent state distribution
+            nn.Linear(h // 2, self.config.latent_dim * 2)  # Output mean and log-variance
         )
 
     def forward(self, h_t):
         x = self.network(h_t)
         mean, log_std = torch.chunk(x, 2, dim=-1)
-        std = F.softplus(log_std) #+ 1e-6
+        std = F.softplus(log_std) + 1e-6 # we employ free bits by clipping the dynamics and representation losses below the value of 1 nat ≈ 1.44 bits.
         dist = torch.distributions.Normal(mean, std)
-        return dist
+        return dist.rsample()
     
 
     def input_init(self):
