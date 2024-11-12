@@ -123,7 +123,7 @@ class DataGeneration:
 
     
     
-    def random_topology_data_generation(self):
+    def random_topology_data_generation(self, start=0):
         num_episodes = len(self.env.chronics_handler.subpaths)
         
         steps = []
@@ -133,9 +133,7 @@ class DataGeneration:
         reward_data = []
         done_data = []
 
-        start_time = time.time() 
-
-        for episode_id in range(num_episodes):
+        for episode_id in range(start, num_episodes+1):
             print(f"Episode ID : {episode_id}")
             self.env.set_id(episode_id)
             obs = self.env.reset()
@@ -188,33 +186,31 @@ class DataGeneration:
                     continue  
 
 
-                if time.time() - start_time >= 600:  # 3600 seconds = 1 hour
-                    print("Saving data to file after one hour.")
-                    self.save_data(obs_data, action_data, obs_next_data, reward_data, done_data, steps)
-                    
-                    # Reset data lists and timer
-                    obs_data, action_data, obs_next_data, reward_data, done_data, steps = [], [], [], [], [], []
-                    start_time = time.time()  # Reset the timer after saving
+            # Save data at the end of the episode
+            self.save_data(obs_data, action_data, obs_next_data, reward_data, done_data, steps, episode_id)
+
+            # Reset data lists for the next episode
+            obs_data, action_data, obs_next_data, reward_data, done_data, steps = [], [], [], [], [], []
                 
 
         
 
 
-    def save_data(self, obs_data, action_data, obs_next_data, reward_data, done_data, steps):
-        # Convert lists to np.array
-        obs_data = np.array(obs_data, dtype=object)
-        action_data = np.array(action_data, dtype=int)
-        obs_next_data = np.array(obs_next_data, dtype=object)
-        reward_data = np.array(reward_data, dtype=float)
-        done_data = np.array(done_data, dtype=bool)
-        steps_data = np.array(steps, dtype=int)
-
-        # Save to .npz file with a unique filename
-        timestamp = int(time.time())
-        filename = f"dreamer\\data_generation\\random_data_generation_output_{timestamp}.npz"
-        np.savez(filename, obs=obs_data, action=action_data, 
-                obs_next=obs_next_data, reward=reward_data, done=done_data, steps=steps_data)
-        print(f"Data saved to {filename}")
+    def save_data(self, obs_data, action_data, obs_next_data, reward_data, done_data, steps, episode_id):
+        """
+        Save the episode data to a file. File is named according to episode_id for easy tracking.
+        """
+        filename = f"dreamer\\data_generation\\data\\episode_{episode_id}_data.npz"
+        np.savez(
+            filename,
+            obs=np.array(obs_data, dtype=object),
+            action=np.array(action_data, dtype=int),
+            obs_next=np.array(obs_next_data, dtype=object),
+            reward=np.array(reward_data, dtype=float),
+            done=np.array(done_data, dtype=bool),
+            steps=np.array(steps, dtype=int)
+        )
+        print(f"Data saved for episode {episode_id} in {filename}")
 
 
     def generate_random_data(self):
@@ -281,7 +277,7 @@ class DataGeneration:
     
 
 
-    def get_substation_connections(env):
+    def get_substation_connections(self):
         """
         Returns a dictionary with each substation ID and the number of powerlines connected to it.
 
@@ -295,11 +291,11 @@ class DataGeneration:
         substation_connections = defaultdict(int)
 
         # Retrieve powerline-to-substation mappings
-        line_or_to_subid = env.line_or_to_subid  # Array of origin substations for each powerline
-        line_ex_to_subid = env.line_ex_to_subid  # Array of extremity substations for each powerline
+        line_or_to_subid = self.env.line_or_to_subid  # Array of origin substations for each powerline
+        line_ex_to_subid = self.env.line_ex_to_subid  # Array of extremity substations for each powerline
 
         # Count connections for each substation
-        for line_id in range(env.n_line):
+        for line_id in range(self.env.n_line):
             origin_substation = line_or_to_subid[line_id]
             extremity_substation = line_ex_to_subid[line_id]
             
@@ -311,7 +307,7 @@ class DataGeneration:
     
 
 
-    def find_most_connected_substations(substation_connections, top_n=5):
+    def find_most_connected_substations(self, substation_connections, top_n=5):
         """
         Finds the top N substations with the highest number of powerline connections.
 
@@ -330,7 +326,7 @@ class DataGeneration:
 
 
 
-    def find_powerlines_connected_to_substations(env, target_substations):
+    def find_powerlines_connected_to_substations(self, target_substations):
         """
         Finds all powerline IDs that are connected to the given substations.
 
@@ -345,11 +341,11 @@ class DataGeneration:
         connected_powerlines = {sub: [] for sub in target_substations}
 
         # Retrieve powerline-to-substation mappings
-        line_or_to_subid = env.line_or_to_subid  # Origin substation for each powerline
-        line_ex_to_subid = env.line_ex_to_subid  # Extremity substation for each powerline
+        line_or_to_subid = self.env.line_or_to_subid  # Origin substation for each powerline
+        line_ex_to_subid = self.env.line_ex_to_subid  # Extremity substation for each powerline
 
         # Loop through each powerline to find connections to target substations
-        for line_id in range(env.n_line):
+        for line_id in range(self.env.n_line):
             origin_substation = line_or_to_subid[line_id]
             extremity_substation = line_ex_to_subid[line_id]
 
@@ -366,7 +362,7 @@ class DataGeneration:
         DATA_PATH = f'C:\\Users\\Ernest\\data_grid2op\\{self.config.env_name}'  # for demo only, use your own dataset
         SCENARIO_PATH = f'C:\\Users\\Ernest\\data_grid2op\\{self.config.env_name}'
         #LINES2ATTACK = [0, 1, 5, 7, 9, 16, 17, 4, 9, 13, 14, 18]
-        substation_connections = self.get_substation_connections(env)
+        substation_connections = self.get_substation_connections()
         top_substations = self.find_most_connected_substations(substation_connections, top_n=30)
         target_substations = [item[0] for item in top_substations]
 
@@ -381,7 +377,7 @@ class DataGeneration:
             #print(f"Substation {substation} is connected to powerlines: {lines}")
         
 
-        NUM_EPISODES = 1  # each scenario runs 100 times for each attack (or to say, sample 100 points)
+        NUM_EPISODES = 100  # each scenario runs 100 times for each attack (or to say, sample 100 points)
 
         obs_list = []
         reward_list = []
