@@ -16,7 +16,7 @@ class RewardPredictor(nn.Module):
 
         self.config = config
         self.network = nn.Sequential(
-            nn.Linear(self.config.latent_dim + self.hidden_dim, 64),
+            nn.Linear(self.config.latent_dim + self.config.hidden_dim, 64),
             nn.ReLU(),
             nn.Linear(64, 32),
             nn.ReLU(),

@@ -10,7 +10,7 @@ class ContinuousPredictor(nn.Module):
 
         self.config = config
         self.network = nn.Sequential(
-            nn.Linear(self.config.latent_dim + self.hidden_dim, 64),
+            nn.Linear(self.config.latent_dim + self.config.hidden_dim, 64),
             nn.ReLU(),
             nn.Linear(64, 32),
             nn.ReLU(),
@@ -25,7 +25,7 @@ class ContinuousPredictor(nn.Module):
         x = self.network(x)
 
         dist = torch.distributions.Bernoulli(logits=x)   #Bernoulli distribution is a natural choice for modeling binary events
-        return dist
+        return dist.sample()
     
 
     def save(self, model_name="continue_predictor"):
