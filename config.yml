@@ -1,0 +1,17 @@
+
+train_iterations : 1000
+horizon_length : 15
+batch_size : 50
+batch_length : 50
+collect_interval : 100
+num_interaction_episodes : 1
+seed_episodes : 5
+num_evaluate : 3
+env_name: "l2rpn_case14_sandbox"
+episode_num : 100000
+latent_dim : 256
+hidden_dim : 512
+input_dim : 4295
+action_dim : 200
+device : 'cpu'
+learning_rate : 1e-4
