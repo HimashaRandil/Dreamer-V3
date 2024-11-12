@@ -4,17 +4,33 @@ import random
 import grid2op
 import numpy as np
 import pandas as pd
+from dreamer.data_generation.generate import DataGeneration
 
 
 
 class Teacher:
-    def __init__(self, env) -> None:
-        self.env = env
+    def __init__(self, config) -> None:
+        self.config = config
+        self.dt = DataGeneration(self.config)
+        self.env = self.dt.env
 
         self.DATA_PATH = self.env.get_path_env() #'C:\\Users\\Ernest\\data_grid2op\\l2rpn_wcci_2022'  # for demo only, use your own dataset
         self.SCENARIO_PATH = self.env.chronics_handler.path #'C:\\Users\\Ernest\\data_grid2op\\l2rpn_wcci_2022'
         self.SAVE_PATH = 'dreamer\\asr'
-        self.LINES2ATTACK = [0, 1, 5, 7, 9, 16, 17, 4, 9, 13, 14, 18]
+
+
+        substation_connections = self.dt.get_substation_connections(self.env)
+        top_substations = self.dt.find_most_connected_substations(substation_connections, top_n=12)
+        target_substations = [item[0] for item in top_substations]
+        self.LINES2ATTACK = [] #[0, 1, 5, 7, 9, 16, 17, 4, 9, 13, 14, 18]
+
+        result = self.dt.find_powerlines_connected_to_substations(target_substations)
+
+        # Print the result
+        for substation, lines in result.items():
+            for i in lines:
+                self.LINES2ATTACK.append(i)
+
         self.NUM_EPISODES = 1  # each scenario runs 100 times for each attack (or to say, sample 100 points)
 
 
