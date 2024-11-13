@@ -16,7 +16,7 @@ class ContinuousPredictor(nn.Module):
             nn.ReLU(),
             nn.Linear(32, 16),
             nn.ReLU(),
-            nn.Linear(16, 2)
+            nn.Linear(16, 1)
         )
 
 
