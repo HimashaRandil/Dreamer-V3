@@ -195,11 +195,11 @@ class DataGeneration:
         
 
 
-    def save_data(self, obs_data, action_data, obs_next_data, reward_data, done_data, steps, episode_id):
+    def save_data(self, obs_data, action_data, obs_next_data, reward_data, done_data, steps, episode_id, folder_name = "dreamer\\data_generation\\data"):
         """
         Save the episode data to a file. File is named according to episode_id for easy tracking.
         """
-        folder_name = "dreamer\\data_generation\\data"
+        
         os.makedirs(folder_name, exist_ok=True)
         filename = f"{folder_name}\\episode_{episode_id}_data.npz"
         np.savez(
