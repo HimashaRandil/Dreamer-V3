@@ -140,7 +140,6 @@ class DataGeneration:
             
 
             for i in range (self.env.max_episode_duration()):
-                print(i)
                 try:
                     action = self.random_topology.act() #self.agent.act() #
                     obs_, reward, done, _ = self.env.step(action)
@@ -200,7 +199,9 @@ class DataGeneration:
         """
         Save the episode data to a file. File is named according to episode_id for easy tracking.
         """
-        filename = f"dreamer\\data_generation\\data\\episode_{episode_id}_data.npz"
+        folder_name = "dreamer\\data_generation\\data"
+        os.makedirs(folder_name, exist_ok=True)
+        filename = f"{folder_name}\\episode_{episode_id}_data.npz"
         np.savez(
             filename,
             obs=np.array(obs_data, dtype=object),
