@@ -28,7 +28,7 @@ class RSSM(nn.Module):
         x = torch.cat((obs, hidden_state), dim=-1)
         z, dist = self.e_model(x)
         h = self.r_model(z, action, hidden_state)
-        z_t = self.d_model(h)
-        return z_t, z, h, dist
+        z_t, dynamic_dist = self.d_model(h)
+        return z_t, z, h, dist, dynamic_dist
     
 
