@@ -24,7 +24,7 @@ class DynamicPredictor(nn.Module):
         mean, log_std = torch.chunk(x, 2, dim=-1)
         std = F.softplus(log_std) + 1e-6 # we employ free bits by clipping the dynamics and representation losses below the value of 1 nat ≈ 1.44 bits.
         dist = torch.distributions.Normal(mean, std)
-        return dist.rsample()
+        return dist, dist.rsample()
     
 
     def input_init(self):
