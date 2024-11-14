@@ -32,3 +32,14 @@ class RSSM(nn.Module):
         return z_t, z, h, dist, dynamic_dist
     
 
+    def save_rssm(self):
+        self.r_model.save()
+        self.d_model.save()
+        self.e_model.save()
+
+    def load_rssm(self):
+        self.r_model.load()
+        self.e_model.load()
+        self.d_model.load()
+    
+
