@@ -109,7 +109,71 @@ class Trainer:
 
     
     def evaluate(self, data_loader):
-        pass
+        self.model.eval()
+
+        total_recon_loss = 0
+        total_reward_loss = 0
+        total_continue_loss = 0
+        total_kl_div = 0
+        num_batches = 0
+
+        with torch.no_grad():  # Disable gradient computation
+            for obs, actions, rewards, dones, next_obs in data_loader:
+                # Move data to the appropriate device
+                obs, actions, rewards, dones = obs.to(self.config.device), actions.to(self.config.device), rewards.to(self.config.device), dones.to(self.config.device)
+                next_obs = next_obs.to(self.config.device)
+
+                # Initialize hidden state and action at t=0
+                hidden_state, action = self.model.rssm.recurrent_model_input_init()
+
+                # Forward pass through the world model
+                outputs = self.model(obs, hidden_state, action)
+                hidden_state = outputs['h']
+
+                # Calculate Posterior (using next_obs with Encoder)
+                z_posterior, posterior_dist = self.model.e_model(torch.cat((next_obs, hidden_state), dim=-1))
+
+                # Reconstruction Loss (Decoder)
+                reconstructed_obs = outputs['reconstructed_obs']
+                recon_loss = F.mse_loss(reconstructed_obs, obs, reduction='sum')
+                total_recon_loss += recon_loss.item()
+
+                # Reward Prediction Loss (MSE)
+                reward_pred = outputs['reward']
+                reward_loss = F.mse_loss(reward_pred, rewards, reduction='sum')
+                total_reward_loss += reward_loss.item()
+
+                # Continue Predictor Loss (Binary Cross-Entropy)
+                continue_pred = outputs['continue_prob']
+                continue_loss = F.binary_cross_entropy_with_logits(continue_pred, dones.float(), reduction='sum')
+                total_continue_loss += continue_loss.item()
+
+                # KL Divergence Loss
+                #posterior_dist = outputs['posterior_dist']
+                prior_dist = outputs['prior_dist']
+                kl_div = torch.distributions.kl_divergence(posterior_dist, prior_dist).mean()
+                total_kl_div += kl_div.item()
+
+                # Increment the batch counter
+                num_batches += 1
+
+        # Calculate average metrics
+        avg_recon_loss = total_recon_loss / len(data_loader.dataset)
+        avg_reward_loss = total_reward_loss / len(data_loader.dataset)
+        avg_continue_loss = total_continue_loss / len(data_loader.dataset)
+        avg_kl_div = total_kl_div / num_batches
+
+        # Print or log metrics
+        print(f"Evaluation - Recon Loss: {avg_recon_loss:.4f}, Reward Loss: {avg_reward_loss:.4f}, Continue Loss: {avg_continue_loss:.4f}, KL Divergence: {avg_kl_div:.4f}")
+
+        # Return metrics as a dictionary
+        return {
+            'recon_loss': avg_recon_loss,
+            'reward_loss': avg_reward_loss,
+            'continue_loss': avg_continue_loss,
+            'kl_divergence': avg_kl_div
+        }
+    
 
     def evaluate_with_grid(self):
         pass
