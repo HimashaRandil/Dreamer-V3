@@ -36,3 +36,9 @@ class RecurrentModel(nn.Module):
     def action_init(self):
         return torch.zeros(self.config.batch_size, self.config.action_dim).to(self.config.device)
     
+
+    def save(self, model_name="recurrent_model"):
+        torch.save(self.state_dict(), os.path.join(self.config.path, model_name))
+
+    def load(self, model_name="recurrent_model"):
+        self.load_state_dict(torch.load(os.path.join(self.config.path, model_name)))
