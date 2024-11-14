@@ -38,6 +38,21 @@ class WorldModel(nn.Module):
         }
     
 
+    def save_world_model(self):
+        self.rssm.save_rssm()
+        self.reward_predictor.save()
+        self.continue_predictor.save()
+        self.decoder.save()
+        print(f"World Model saved at {self.config.path}")
+
+    def load_world_model(self):
+        self.rssm.load_rssm()
+        self.reward_predictor.load()
+        self.continue_predictor.load()
+        self.decoder.load()
+        print(f"World model loaded at {self.config.path}")
+    
+
 
 class Trainer:
     def __init__(self, config, model:WorldModel) -> None:
@@ -55,6 +70,7 @@ class Trainer:
             hidden_state, action = self.model.rssm.recurrent_model_input_init()
 
             outputs = self.model(obs, hidden_state, action)
+            hidden_state = outputs['h']
 
             # Calculate Posterior (using next_obs with Encoder)
             z_posterior, posterior_dist = self.model.e_model(torch.cat((next_obs, hidden_state), dim=-1))
@@ -73,7 +89,7 @@ class Trainer:
             continue_loss = F.binary_cross_entropy_with_logits(continue_pred, dones.float())
 
             # KL Divergence Loss
-            posterior_dist = outputs['posterior_dist']
+            #posterior_dist = outputs['posterior_dist']
             prior_dist = outputs['prior_dist']
             kl_div = torch.distributions.kl_divergence(posterior_dist, prior_dist).mean()
             
@@ -98,9 +114,5 @@ class Trainer:
     def evaluate_with_grid(self):
         pass
 
-    def save_world_model(self):
-        pass
-
-    def load_world_model(self):
-        pass
+    
 
