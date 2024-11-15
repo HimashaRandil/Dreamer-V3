@@ -36,8 +36,6 @@ class DataGeneration:
         obs_next_data = []
         reward_data = []
         done_data = []
-
-        start_time = time.time() 
                
 
         for episode_id in range(start, num_episodes):
@@ -96,17 +94,22 @@ class DataGeneration:
                     print(f"Grid2OpException encountered at step {i} in episode {episode_id}: {e}")
                     self.env.set_id(episode_id)
                     obs = self.env.reset()
-                    self.env.fast_forward_chronics(i)
+                    self.env.fast_forward_chronics(i-1)
                     continue
 
-                if time.time() - start_time >= 600:  # 3600 seconds = 1 hour
-                    print("Saving data to file after one hour.")
-                    self.save_data(obs_data, action_data, obs_next_data, reward_data, done_data, steps)
-                    
-                    # Reset data lists and timer
-                    obs_data, action_data, obs_next_data, reward_data, done_data, steps = [], [], [], [], [], []
-                    start_time = time.time()  # Reset the timer after saving
+                except Grid2OpException as e:
+                    print(f"Grid2OpException encountered at step {i} in episode {episode_id}: {e}")
+                    self.env.set_id(episode_id)
+                    obs = self.env.reset()
+                    self.env.fast_forward_chronics(i-1)
+                    continue  
+
                 
+            # Save data at the end of the episode
+            self.save_data(obs_data, action_data, obs_next_data, reward_data, done_data, steps, episode_id, folder_name="dreamer\\data_generation\\topo_data")
+
+            # Reset data lists for the next episode
+            obs_data, action_data, obs_next_data, reward_data, done_data, steps = [], [], [], [], [], []
 
             """# Convert lists to np.array
             obs_data = np.array(obs_data, dtype=object)
