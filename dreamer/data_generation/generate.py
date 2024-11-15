@@ -48,8 +48,7 @@ class DataGeneration:
             
 
             for i in range (self.env.max_episode_duration()):
-                print(i)
-
+                
                 try:
                     action = self.agent.act(obs, reward, done) #self.agent.act() #
                     obs_, reward, done, _ = self.env.step(action)
