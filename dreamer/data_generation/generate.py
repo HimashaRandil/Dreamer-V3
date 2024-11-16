@@ -26,9 +26,13 @@ class DataGeneration:
         self.agent = TopologyGreedy(self.env.action_space)
         self.random_topology = RandomTopologyAgent(self.action_converter.actions)
         #self.agent = TopologyRandom(self.env)
+        num = len(self.env.chronics_handler.subpaths)
 
-    def topology_data_generation(self, start = 0, folder_name="dreamer\\data_generation\\topo_data"):
-        num_episodes = len(self.env.chronics_handler.subpaths)
+    def topology_data_generation(self, start = 0, folder_name="dreamer\\data_generation\\topo_data", **args):
+        if args.get('end') is None:
+            num_episodes = len(self.env.chronics_handler.subpaths)
+        else:
+            num_episodes = args['end']
         
         steps = []
         obs_data = []
@@ -64,8 +68,6 @@ class DataGeneration:
 
                     # Update observation for the next step
                     obs = obs_
-
-                    
 
                     if done:
                         self.env.set_id(episode_id)
@@ -366,7 +368,7 @@ class DataGeneration:
         SCENARIO_PATH = self.env.chronics_handler.path
         #LINES2ATTACK = [0, 1, 5, 7, 9, 16, 17, 4, 9, 13, 14, 18]
         substation_connections = self.get_substation_connections()
-        top_substations = self.find_most_connected_substations(substation_connections, top_n=30)
+        top_substations = self.find_most_connected_substations(substation_connections, top_n=10)
         target_substations = [item[0] for item in top_substations]
 
         LINES2ATTACK = []
