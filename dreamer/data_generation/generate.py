@@ -14,6 +14,7 @@ import time
 import random
 from grid2op.Exceptions import NoForecastAvailable
 from collections import defaultdict
+from dreamer.Utils.logger import logging
 
 
 
@@ -363,12 +364,9 @@ class DataGeneration:
         return connected_powerlines
 
 
-    def teacher_generation(self, folder_name = "dreamer\\data_generation\\topo_data"):
-        DATA_PATH = self.env.get_path_env()  # for demo only, use your own dataset
-        SCENARIO_PATH = self.env.chronics_handler.path
-        #LINES2ATTACK = [0, 1, 5, 7, 9, 16, 17, 4, 9, 13, 14, 18]
+    def line2attack(self):
         substation_connections = self.get_substation_connections()
-        top_substations = self.find_most_connected_substations(substation_connections, top_n=10)
+        top_substations = self.find_most_connected_substations(substation_connections, top_n=5)
         target_substations = [item[0] for item in top_substations]
 
         LINES2ATTACK = []
@@ -379,58 +377,69 @@ class DataGeneration:
         for substation, lines in result.items():
             for i in lines:
                 LINES2ATTACK.append(i)
-            #print(f"Substation {substation} is connected to powerlines: {lines}")
         
+        return LINES2ATTACK
 
-        NUM_EPISODES = 100  # each scenario runs 100 times for each attack (or to say, sample 100 points)
+    def teacher_generation(self, line2attack, NUM_EPISODES=1000, folder_name="dreamer\\data_generation\\teacher_data"):
+        DATA_PATH = self.env.get_path_env()  # for demo only, use your own dataset
+        SCENARIO_PATH = self.env.chronics_handler.path
 
-        obs_list = []
-        reward_list = []
-        next_obs_list = []
-        done_list = []
-        action_list = []
-        steps_list = []
-
+        # Ensure the folder exists
+        os.makedirs(folder_name, exist_ok=True)
 
         for episode in range(NUM_EPISODES):
-            # traverse all attacks
-            for line_to_disconnect in LINES2ATTACK:
+            # Loop through all lines to attack
+            for line_to_disconnect in line2attack:
+                obs_list = []
+                reward_list = []
+                next_obs_list = []
+                done_list = []
+                action_list = []
+                steps_list = []
+
                 try:
-                    # if lightsim2grid is available, use it.
+                    # Use LightSimBackend if available
                     from lightsim2grid import LightSimBackend
                     backend = LightSimBackend()
                     env = grid2op.make(dataset=DATA_PATH, chronics_path=SCENARIO_PATH, backend=backend)
-                except:
+                except ImportError:
                     env = grid2op.make(dataset=DATA_PATH, chronics_path=SCENARIO_PATH)
+                
+                # Shuffle chronics for diversity
                 env.chronics_handler.shuffle(shuffler=lambda x: x[np.random.choice(len(x), size=len(x), replace=False)])
-                # traverse all scenarios
+                
+                # Loop through all scenarios
                 for chronic in range(len(os.listdir(SCENARIO_PATH))):
-                    print(f"Chronic : {chronic}")
+                    print(f"Chronic: {chronic}")
                     env.reset()
-                    dst_step = episode * 72 + random.randint(0, 72)  # a random sampling every 6 hours
-                    print('\n\n' + '*' * 50 + '\nScenario[%s]: at step[%d], disconnect line-%d(from bus-%d to bus-%d]' % (
-                        env.chronics_handler.get_name(), dst_step, line_to_disconnect,
-                        env.line_or_to_subid[line_to_disconnect], env.line_ex_to_subid[line_to_disconnect]))
-                    # to the destination time-step
+                    dst_step = episode * 72 + random.randint(0, 72)  # Random sampling every 6 hours
+                    print('\n\n' + '*' * 50 + f'\nScenario[{env.chronics_handler.get_name()}]: '
+                          f'at step[{dst_step}], disconnect line-{line_to_disconnect} '
+                          f'(from bus-{env.line_or_to_subid[line_to_disconnect]} '
+                          f'to bus-{env.line_ex_to_subid[line_to_disconnect]})')
+
+                    # Fast forward to the target time step
                     env.fast_forward_chronics(dst_step - 1)
                     obs, reward, done, _ = env.step(env.action_space({}))
                     if done:
                         break
-                    # disconnect the targeted line
+                    
+                    # Disconnect the targeted line
                     new_line_status_array = np.zeros(obs.rho.shape, dtype=np.int32)
                     new_line_status_array[line_to_disconnect] = -1
                     action = env.action_space({"set_line_status": new_line_status_array})
                     obs, reward, done, _ = env.step(action)
+
                     if obs.rho.max() < 1:
-                        # not necessary to do a dispatch
+                        # Skip if no further action is needed
                         continue
                     else:
-                        # search a greedy action
+                        # Find a greedy action
                         action_ = self.topology_search(env)
                         obs_, reward, done, _ = env.step(action_)
-
                         action_idx = self.action_converter.action_idx(action_)
 
+                        # Append data for this step
                         obs_list.append(obs.to_vect())
                         next_obs_list.append(obs_.to_vect())
                         reward_list.append(reward)
@@ -438,11 +447,10 @@ class DataGeneration:
                         action_list.append(action_idx)
                         steps_list.append(dst_step)
 
-                # Save data at the end of the episode
-                self.save_data(obs_list, action_list, next_obs_list, reward_list, done_list, steps_list, chronic, folder_name)
-
-                # Reset data lists for the next episode
-                obs_list, action_list, next_obs_list, reward_list, done_list, steps_list = [], [], [], [], [], []
+                # Save data for this line attack and episode
+                file_suffix = f"line_{line_to_disconnect}_episode_{episode}.npz"
+                self.save_data(obs_list, action_list, next_obs_list, reward_list, done_list, steps_list, file_suffix, folder_name)
+                logging.info(f"Data saved in {folder_name} at {file_suffix}")
         
         """# Convert lists to np.array
         obs_data = np.array(obs_list, dtype=object)
