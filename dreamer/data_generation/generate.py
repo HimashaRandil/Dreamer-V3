@@ -27,7 +27,7 @@ class DataGeneration:
         self.random_topology = RandomTopologyAgent(self.action_converter.actions)
         #self.agent = TopologyRandom(self.env)
 
-    def topology_data_generation(self, start = 0):
+    def topology_data_generation(self, start = 0, folder_name="dreamer\\data_generation\\topo_data"):
         num_episodes = len(self.env.chronics_handler.subpaths)
         
         steps = []
@@ -105,7 +105,7 @@ class DataGeneration:
 
                 
             # Save data at the end of the episode
-            self.save_data(obs_data, action_data, obs_next_data, reward_data, done_data, steps, episode_id, folder_name="dreamer\\data_generation\\topo_data")
+            self.save_data(obs_data, action_data, obs_next_data, reward_data, done_data, steps, episode_id, folder_name)
 
             # Reset data lists for the next episode
             obs_data, action_data, obs_next_data, reward_data, done_data, steps = [], [], [], [], [], []
@@ -125,7 +125,7 @@ class DataGeneration:
 
     
     
-    def random_topology_data_generation(self, start=0):
+    def random_topology_data_generation(self, start=0, folder_name = "dreamer\\data_generation\\data"):
         num_episodes = len(self.env.chronics_handler.subpaths)
         
         steps = []
@@ -188,7 +188,7 @@ class DataGeneration:
 
 
             # Save data at the end of the episode
-            self.save_data(obs_data, action_data, obs_next_data, reward_data, done_data, steps, episode_id)
+            self.save_data(obs_data, action_data, obs_next_data, reward_data, done_data, steps, episode_id, folder_name)
 
             # Reset data lists for the next episode
             obs_data, action_data, obs_next_data, reward_data, done_data, steps = [], [], [], [], [], []
@@ -264,7 +264,7 @@ class DataGeneration:
         print("step-%s, line-%s(from bus-%d to bus-%d) overflows, max rho is %.5f" %
             (dst_step, overflow_id, self.env.line_or_to_subid[overflow_id],
             self.env.line_ex_to_subid[overflow_id], obs.rho.max()))
-        all_actions = self.env.action_space.get_all_unitary_topologies_change(self.env.action_space)
+        all_actions = self.env.action_space.get_all_unitary_topologies_set(self.env.action_space)
         action_chosen = self.env.action_space({})
         tick = time.time()
         for action in all_actions:
@@ -361,9 +361,9 @@ class DataGeneration:
         return connected_powerlines
 
 
-    def teacher_generation(self):
-        DATA_PATH = f'C:\\Users\\Ernest\\data_grid2op\\{self.config.env_name}'  # for demo only, use your own dataset
-        SCENARIO_PATH = f'C:\\Users\\Ernest\\data_grid2op\\{self.config.env_name}'
+    def teacher_generation(self, folder_name = "dreamer\\data_generation\\topo_data"):
+        DATA_PATH = self.env.get_path_env()  # for demo only, use your own dataset
+        SCENARIO_PATH = self.env.chronics_handler.path
         #LINES2ATTACK = [0, 1, 5, 7, 9, 16, 17, 4, 9, 13, 14, 18]
         substation_connections = self.get_substation_connections()
         top_substations = self.find_most_connected_substations(substation_connections, top_n=30)
@@ -371,7 +371,7 @@ class DataGeneration:
 
         LINES2ATTACK = []
         # Find powerlines connected to the target substations
-        result = self.find_powerlines_connected_to_substations(env, target_substations)
+        result = self.find_powerlines_connected_to_substations(target_substations)
 
         # Print the result
         for substation, lines in result.items():
@@ -387,6 +387,7 @@ class DataGeneration:
         next_obs_list = []
         done_list = []
         action_list = []
+        steps_list = []
 
 
         for episode in range(NUM_EPISODES):
@@ -402,6 +403,7 @@ class DataGeneration:
                 env.chronics_handler.shuffle(shuffler=lambda x: x[np.random.choice(len(x), size=len(x), replace=False)])
                 # traverse all scenarios
                 for chronic in range(len(os.listdir(SCENARIO_PATH))):
+                    print(f"Chronic : {chronic}")
                     env.reset()
                     dst_step = episode * 72 + random.randint(0, 72)  # a random sampling every 6 hours
                     print('\n\n' + '*' * 50 + '\nScenario[%s]: at step[%d], disconnect line-%d(from bus-%d to bus-%d]' % (
@@ -422,18 +424,25 @@ class DataGeneration:
                         continue
                     else:
                         # search a greedy action
-                        action = self.topology_search(env)
-                        obs_, reward, done, _ = env.step(action)
+                        action_ = self.topology_search(env)
+                        obs_, reward, done, _ = env.step(action_)
 
-                        action_idx = self.action_converter.action_idx(action)
+                        action_idx = self.action_converter.action_idx(action_)
 
                         obs_list.append(obs.to_vect())
                         next_obs_list.append(obs_.to_vect())
                         reward_list.append(reward)
                         done_list.append(done)
                         action_list.append(action_idx)
+                        steps_list.append(dst_step)
+
+                # Save data at the end of the episode
+                self.save_data(obs_list, action_list, next_obs_list, reward_list, done_list, steps_list, chronic, folder_name)
+
+                # Reset data lists for the next episode
+                obs_list, action_list, next_obs_list, reward_list, done_list, steps_list = [], [], [], [], [], []
         
-        # Convert lists to np.array
+        """# Convert lists to np.array
         obs_data = np.array(obs_list, dtype=object)
         action_data = np.array(action_list, dtype=int)
         obs_next_data = np.array(next_obs_list, dtype=object)
@@ -442,4 +451,4 @@ class DataGeneration:
 
         # Save to .npz file
         np.savez("dreamer\\data_generation\\teacher_generation_output.npz", obs=obs_data, action=action_data, 
-                 obs_next=obs_next_data, reward=reward_data, done=done_data)
+                 obs_next=obs_next_data, reward=reward_data, done=done_data)"""
