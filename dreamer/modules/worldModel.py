@@ -30,6 +30,17 @@ class WorldModel(nn.Module):
             print("Cuda is not available for training")
             
         self.device = torch.device(self.config.device)
+
+        self.optimizer = optim.Adam([
+                {'params': self.rssm.r_model.parameters()},  
+                {'params': self.rssm.d_model.parameters()},
+                {'params': self.rssm.e_model.parameters()},
+                {'params': self.decoder.parameters()},  
+                {'params': self.reward_predictor.parameters()},
+                {'params': self.continue_predictor.parameters()}
+            ], lr=self.config.learning_rate)
+        
+
         self.to(self.device)
 
 
@@ -72,7 +83,7 @@ class Trainer:
         self.config = config
         self.model = model
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=config.learning_rate)
+        self.optimizer = self.model.optimizer
 
     
     def train(self, data_loader):
