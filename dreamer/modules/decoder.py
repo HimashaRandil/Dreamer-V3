@@ -16,9 +16,7 @@ class Decoder(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(input_dim, input_dim*2),
             nn.ReLU(),
-            nn.Linear(input_dim*2, input_dim*4),
-            nn.ReLU(),
-            nn.Linear(input_dim*4, self.config.input_dim)  # Outputs back to original input size
+            nn.Linear(input_dim*2, self.config.input_dim)  # Outputs back to original input size
         )
 
 
