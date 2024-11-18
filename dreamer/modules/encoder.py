@@ -20,17 +20,17 @@ class Encoder(nn.Module):
             nn.ReLU(),
             nn.Linear(input_dim//4, input_dim//8),
             nn.ReLU(),
-            nn.Linear(input_dim//8, input_dim//16),
-            nn.ReLU(),
-            nn.Linear(input_dim//16, self.config.latent_dim *2)  # Outputs to the latent space
+            nn.Linear(input_dim//8, self.config.latent_dim*2)
         )
 
     def forward(self, x):
+        # Get encoder output
         latent_params = self.encoder(x)
         mean, log_var = torch.chunk(latent_params, 2, dim=-1)
         std = torch.exp(0.5 * log_var)
         dist = torch.distributions.Normal(mean, std)
-        z = dist.rsample()  # rsample allows gradients to flow through the sample
+        z = dist.rsample()
+
         return z, dist
     
 
