@@ -8,6 +8,11 @@ from dreamer.modules.decoder import Decoder
 from dreamer.modules.rewardModel import RewardPredictor
 from dreamer.modules.continueModel import ContinuousPredictor
 import torch.optim as optim
+import grid2op
+from grid2op.Reward import L2RPNSandBoxScore
+from lightsim2grid import LightSimBackend
+
+
 
 class WorldModel(nn.Module):
     def __init__(self, config) -> None:
@@ -18,6 +23,14 @@ class WorldModel(nn.Module):
         self.decoder = Decoder(config)
         self.reward_predictor = RewardPredictor(config)
         self.continue_predictor = ContinuousPredictor(config)
+
+        if torch.cuda.is_available():
+            print("Cuda is availabel for Training")
+        else:
+            print("Cuda is not available for training")
+            
+        self.device = torch.device(self.config.device)
+        self.to(self.device)
 
 
 
@@ -59,13 +72,12 @@ class Trainer:
         self.config = config
         self.model = model
 
-        self.model.to(self.config.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=config.learning_rate)
 
     
     def train(self, data_loader):
-        for obs, actions, rewards, dones, next_obs in data_loader:  # Assume batched data from replay buffer
-            obs, actions, rewards, dones, next_obs = obs.to(self.config.device), actions.to(self.config.device), rewards.to(self.config.device), dones.to(self.config.device), next_obs.to(self.config.device)
+        for obs, actions, rewards, dones, next_obs in data_loader:  
+            obs, actions, rewards, dones, next_obs = obs.to(self.model.device), actions.to(self.model.device), rewards.to(self.model.device), dones.to(self.model.device), next_obs.to(self.model.device)
         
             hidden_state, action = self.model.rssm.recurrent_model_input_init()
 
@@ -176,7 +188,10 @@ class Trainer:
     
 
     def evaluate_with_grid(self):
-        pass
+        env = grid2op.make(self.config.env_name, reward_class=L2RPNSandBoxScore,
+                                backend=LightSimBackend())
+        
+        
 
     
 
