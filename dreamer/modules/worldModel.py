@@ -38,7 +38,7 @@ class WorldModel(nn.Module):
                 {'params': self.decoder.parameters()},  
                 {'params': self.reward_predictor.parameters()},
                 {'params': self.continue_predictor.parameters()}
-            ], lr=self.config.learning_rate)
+            ], lr=float(self.config.learning_rate))
         
 
         self.to(self.device)
