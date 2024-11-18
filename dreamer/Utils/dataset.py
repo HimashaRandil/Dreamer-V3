@@ -1,7 +1,7 @@
 import torch
 import os
 import numpy as np
-
+from torch.utils.data import Dataset, DataLoader
 
 def load_npz_files_from_folder(folder_path):
     all_observations = []
@@ -30,3 +30,19 @@ def load_npz_files_from_folder(folder_path):
     next_observations = np.concatenate(all_next_observations, axis=0)
     
     return observations, rewards, actions, dones, next_observations
+
+
+
+class GrdiDataset(Dataset):
+    def __init__(self, observations, rewards, actions, dones, next_observations):
+        self.observations = torch.tensor(np.array(observations, np.float32), dtype=torch.float32)
+        self.rewards = torch.tensor(np.array(rewards, np.float32), dtype=torch.float32)
+        self.actions = torch.tensor(np.array(actions, np.float32), dtype=torch.long)  # Assuming discrete actions
+        self.dones = torch.tensor(np.array(dones, np.float32), dtype=torch.float32)  # Done flags as float
+        self.next_observations = torch.tensor(np.array(next_observations, np.float32), dtype=torch.float32)
+        
+    def __len__(self):
+        return len(self.observations)
+    
+    def __getitem__(self, idx):
+        return (self.observations[idx], self.rewards[idx], self.actions[idx], self.dones[idx], self.next_observations[idx])
