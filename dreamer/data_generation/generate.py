@@ -277,7 +277,7 @@ class DataGeneration:
             if (not done) and (obs_.rho.max() < min_rho):
                 min_rho = obs_.rho.max()
                 action_chosen = action
-        print("find a greedy action and max rho decreases to %.5f, search duration: %.2f" %
+        logging.info("find a greedy action and max rho decreases to %.5f, search duration: %.2f" %
             (min_rho, time.time() - tick))
         return action_chosen
     
@@ -410,10 +410,9 @@ class DataGeneration:
                 
                 # Loop through all scenarios
                 for chronic in range(len(os.listdir(SCENARIO_PATH))):
-                    print(f"Chronic: {chronic}")
                     env.reset()
                     dst_step = episode * 72 + random.randint(0, 72)  # Random sampling every 6 hours
-                    print('\n\n' + '*' * 50 + f'\nScenario[{env.chronics_handler.get_name()}]: '
+                    logging.info('\n\n' + '*' * 50 + f'\nScenario[{env.chronics_handler.get_name()}]: '
                           f'at step[{dst_step}], disconnect line-{line_to_disconnect} '
                           f'(from bus-{env.line_or_to_subid[line_to_disconnect]} '
                           f'to bus-{env.line_ex_to_subid[line_to_disconnect]})')
