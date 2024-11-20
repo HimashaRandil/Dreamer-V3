@@ -264,9 +264,9 @@ class DataGeneration:
     def topology_search(self, dst_step):
         obs = self.env.get_obs()
         min_rho, overflow_id = obs.rho.max(), obs.rho.argmax()
-        print("step-%s, line-%s(from bus-%d to bus-%d) overflows, max rho is %.5f" %
-            (dst_step, overflow_id, self.env.line_or_to_subid[overflow_id],
-            self.env.line_ex_to_subid[overflow_id], obs.rho.max()))
+        #print("step-%s, line-%s(from bus-%d to bus-%d) overflows, max rho is %.5f" %
+            #(dst_step, overflow_id, self.env.line_or_to_subid[overflow_id],
+            #self.env.line_ex_to_subid[overflow_id], obs.rho.max()))
         all_actions = self.env.action_space.get_all_unitary_topologies_set(self.env.action_space)
         action_chosen = self.env.action_space({})
         tick = time.time()
