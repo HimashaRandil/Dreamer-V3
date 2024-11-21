@@ -2,6 +2,29 @@ import torch
 import os
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
+from dreamer.Utils.utils import Config
+
+
+config = Config.from_yaml('config.yml')
+
+
+
+def one_hot_encode(actions, num_actions):
+    """
+    Convert an array of actions into one-hot encoding.
+    
+    Args:
+    - actions (np.array): Array of integer actions.
+    - num_actions (int): Total number of possible actions (size of action space).
+    
+    Returns:
+    - np.array: One-hot encoded actions, shape (num_samples, num_actions).
+    """
+    actions = np.array(actions)  
+    one_hot_actions = np.zeros((len(actions), num_actions), dtype=np.float32)
+    one_hot_actions[np.arange(len(actions)), actions] = 1
+    return np.array(one_hot_actions)
+
 
 def load_npz_files_from_folder(folder_path):
     all_observations = []
@@ -22,24 +45,27 @@ def load_npz_files_from_folder(folder_path):
             all_dones.append(npz_data['done'])
             all_next_observations.append(npz_data['obs_next'])
     
+
     # Concatenate all arrays along the first axis (stacking the data)
     observations = np.concatenate(all_observations, axis=0)
     rewards = np.concatenate(all_rewards, axis=0)
     actions = np.concatenate(all_actions, axis=0)
     dones = np.concatenate(all_dones, axis=0)
     next_observations = np.concatenate(all_next_observations, axis=0)
+
+    one_hot_actions = one_hot_encode(actions, config.action_dim)
     
-    return observations, rewards, actions, dones, next_observations
+    return observations, rewards, one_hot_actions, dones, next_observations
 
 
 
 class GrdiDataset(Dataset):
-    def __init__(self, observations, rewards, actions, dones, next_observations):
-        self.observations = torch.tensor(np.array(observations, np.float32), dtype=torch.float32)
-        self.rewards = torch.tensor(np.array(rewards, np.float32), dtype=torch.float32)
-        self.actions = torch.tensor(np.array(actions, np.float32), dtype=torch.long)  # Assuming discrete actions
-        self.dones = torch.tensor(np.array(dones, np.float32), dtype=torch.float32)  # Done flags as float
-        self.next_observations = torch.tensor(np.array(next_observations, np.float32), dtype=torch.float32)
+    def __init__(self, observations, rewards, actions, dones, next_observations, device):
+        self.observations = torch.tensor(np.array(observations, np.float32), dtype=torch.float32, device=device)
+        self.rewards = torch.tensor(np.array(rewards, np.float32), dtype=torch.float32, device=device)
+        self.actions = torch.tensor(np.array(actions, np.float32), dtype=torch.long, device=device)  # Assuming discrete actions
+        self.dones = torch.tensor(np.array(dones, np.float32), dtype=torch.float32, device=device)  # Done flags as float
+        self.next_observations = torch.tensor(np.array(next_observations, np.float32), dtype=torch.float32, device=device)
         
     def __len__(self):
         return len(self.observations)
