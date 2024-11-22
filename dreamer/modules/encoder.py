@@ -29,9 +29,8 @@ class Encoder(nn.Module):
         mean, log_var = torch.chunk(latent_params, 2, dim=-1)
         std = torch.exp(0.5 * log_var)
         dist = torch.distributions.Normal(mean, std)
-        z = dist.rsample()
 
-        return z, dist
+        return dist.rsample(), dist
     
 
     def save(self, model_name="encoder"):
