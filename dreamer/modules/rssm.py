@@ -25,7 +25,15 @@ class RSSM(nn.Module):
 
     
     def forward(self, obs, hidden_state, action):
+        # Assert feature dimensions
+        assert obs.shape[1] == self.config.input_dim, f"Expected obs feature size {self.config.input_dim}, got {obs.shape[1]}"
+        assert hidden_state.shape[1] == self.config.hidden_dim, f"Expected hidden_state size {self.config.hidden_dim}, got {hidden_state.shape[1]}"
+        assert action.shape[1] == self.config.action_dim, f"Expected action size {self.config.action_dim}, got {action.shape[1]}"
+
+
         x = torch.cat((obs, hidden_state), dim=-1)
+        assert x.shape[1] == self.config.input_dim + self.config.hidden_dim
+
         z, dist = self.e_model(x)
         h = self.r_model(z, action, hidden_state)
         dynamic_dist, z_t = self.d_model(h)
