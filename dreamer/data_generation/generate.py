@@ -15,6 +15,8 @@ import random
 from grid2op.Exceptions import NoForecastAvailable
 from collections import defaultdict
 from dreamer.Utils.logger import logging
+import warnings
+warnings.filterwarnings('ignore')
 
 
 
@@ -410,41 +412,46 @@ class DataGeneration:
                 
                 # Loop through all scenarios
                 for chronic in range(len(os.listdir(SCENARIO_PATH))):
-                    env.reset()
-                    dst_step = episode * 72 + random.randint(0, 72)  # Random sampling every 6 hours
-                    logging.info('\n\n' + '*' * 50 + f'\nScenario[{env.chronics_handler.get_name()}]: '
-                          f'at step[{dst_step}], disconnect line-{line_to_disconnect} '
-                          f'(from bus-{env.line_or_to_subid[line_to_disconnect]} '
-                          f'to bus-{env.line_ex_to_subid[line_to_disconnect]})')
+                    try:
+                        env.reset()
+                        dst_step = episode * 72 + random.randint(0, 72)  # Random sampling every 6 hours
+                        logging.info('\n\n' + '*' * 50 + f'\nScenario[{env.chronics_handler.get_name()}]: '
+                            f'at step[{dst_step}], disconnect line-{line_to_disconnect} '
+                            f'(from bus-{env.line_or_to_subid[line_to_disconnect]} '
+                            f'to bus-{env.line_ex_to_subid[line_to_disconnect]})')
 
-                    # Fast forward to the target time step
-                    env.fast_forward_chronics(dst_step - 1)
-                    obs, reward, done, _ = env.step(env.action_space({}))
-                    if done:
-                        break
-                    
-                    # Disconnect the targeted line
-                    new_line_status_array = np.zeros(obs.rho.shape, dtype=np.int32)
-                    new_line_status_array[line_to_disconnect] = -1
-                    action = env.action_space({"set_line_status": new_line_status_array})
-                    obs, reward, done, _ = env.step(action)
+                        # Fast forward to the target time step
+                        env.fast_forward_chronics(dst_step - 1)
+                        obs, reward, done, _ = env.step(env.action_space({}))
+                        if done:
+                            break
+                        
+                        # Disconnect the targeted line
+                        new_line_status_array = np.zeros(obs.rho.shape, dtype=np.int32)
+                        new_line_status_array[line_to_disconnect] = -1
+                        action = env.action_space({"set_line_status": new_line_status_array})
+                        obs, reward, done, _ = env.step(action)
 
-                    if obs.rho.max() < 1:
-                        # Skip if no further action is needed
+                        if obs.rho.max() < 1:
+                            # Skip if no further action is needed
+                            continue
+                        else:
+                            # Find a greedy action
+                            action_ = self.topology_search(env)
+                            obs_, reward, done, _ = env.step(action_)
+                            action_idx = self.action_converter.action_idx(action_)
+
+                            # Append data for this step
+                            obs_list.append(obs.to_vect())
+                            next_obs_list.append(obs_.to_vect())
+                            reward_list.append(reward)
+                            done_list.append(done)
+                            action_list.append(action_idx)
+                            steps_list.append(dst_step)
+
+                    except Exception as e:
+                        print(f"Error Occured \n {e}")
                         continue
-                    else:
-                        # Find a greedy action
-                        action_ = self.topology_search(env)
-                        obs_, reward, done, _ = env.step(action_)
-                        action_idx = self.action_converter.action_idx(action_)
-
-                        # Append data for this step
-                        obs_list.append(obs.to_vect())
-                        next_obs_list.append(obs_.to_vect())
-                        reward_list.append(reward)
-                        done_list.append(done)
-                        action_list.append(action_idx)
-                        steps_list.append(dst_step)
 
                 # Save data for this line attack and episode
                 file_suffix = f"line_{line_to_disconnect}_episode_{episode}.npz"
