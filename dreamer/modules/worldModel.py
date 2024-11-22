@@ -93,10 +93,10 @@ class Trainer:
             hidden_state, action = self.model.rssm.recurrent_model_input_init()
 
             outputs = self.model(obs, hidden_state, action)
-            hidden_state = outputs['h']
+            #hidden_state = outputs['h']
 
             # Calculate Posterior (using next_obs with Encoder)
-            z_posterior, posterior_dist = self.model.e_model(torch.cat((next_obs, hidden_state), dim=-1))
+            #z_posterior, posterior_dist = self.model.e_model(torch.cat((next_obs, hidden_state), dim=-1))
 
             # Calculate losses
             # Reconstruction Loss for Decoder
@@ -112,8 +112,12 @@ class Trainer:
             continue_loss = F.binary_cross_entropy_with_logits(continue_pred, dones.float())
 
             # KL Divergence Loss
-            #posterior_dist = outputs['posterior_dist']
+            posterior_dist = outputs['posterior_dist']
             prior_dist = outputs['prior_dist']
+
+            # Stop gradient for the posterior distribution
+            posterior_dist_stopped = posterior_dist.detach()
+            
             kl_div = torch.distributions.kl_divergence(posterior_dist, prior_dist).mean()
             
             # Apply free bits by clipping the KL divergence
