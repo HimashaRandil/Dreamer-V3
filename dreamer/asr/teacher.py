@@ -16,20 +16,9 @@ class Teacher:
 
         self.DATA_PATH = self.env.get_path_env() #'C:\\Users\\Ernest\\data_grid2op\\l2rpn_wcci_2022'  # for demo only, use your own dataset
         self.SCENARIO_PATH = self.env.chronics_handler.path #'C:\\Users\\Ernest\\data_grid2op\\l2rpn_wcci_2022'
-        self.SAVE_PATH = 'dreamer\\asr'
+        self.SAVE_PATH = 'dreamer\\asr\\data'
 
 
-        substation_connections = self.dt.get_substation_connections(self.env)
-        top_substations = self.dt.find_most_connected_substations(substation_connections, top_n=12)
-        target_substations = [item[0] for item in top_substations]
-        self.LINES2ATTACK = [] #[0, 1, 5, 7, 9, 16, 17, 4, 9, 13, 14, 18]
-
-        result = self.dt.find_powerlines_connected_to_substations(target_substations)
-
-        # Print the result
-        for substation, lines in result.items():
-            for i in lines:
-                self.LINES2ATTACK.append(i)
 
         self.NUM_EPISODES = 1  # each scenario runs 100 times for each attack (or to say, sample 100 points)
 
@@ -57,6 +46,7 @@ class Teacher:
 
 
     def save_sample(self, obs, action, obs_, dst_step, line_to_disconnect, save_path):
+        os.makedirs(save_path, exist_ok=True)
         if action == self.env.action_space({}):
             return None  # not necessary to save a "do nothing" action
         act_or, act_ex, act_gen, act_load = [], [], [], []
@@ -74,12 +64,26 @@ class Teacher:
             (
                 pd.DataFrame(
                     np.array(
-                        [self.env.chronics_handler.get_name(), dst_step, line_to_disconnect,
-                        self.env.line_or_to_subid[line_to_disconnect],
-                        self.env.line_ex_to_subid[line_to_disconnect], str(np.where(obs.rho > 1)[0].tolist()),
-                        str([i for i in np.around(obs.rho[np.where(obs.rho > 1)], 2)]),
-                        action.as_dict()['change_bus_vect']['modif_subs_id'][0], act_or, act_ex, act_gen, act_load,
-                        obs.rho.max(), obs.rho.argmax(), obs_.rho.max(), obs_.rho.argmax()]).reshape([1, -1])),
+                        [
+                            self.env.chronics_handler.get_name(), 
+                            dst_step, 
+                            line_to_disconnect,
+                            self.env.line_or_to_subid[line_to_disconnect],
+                            self.env.line_ex_to_subid[line_to_disconnect], 
+                            str(np.where(obs.rho > 1)[0].tolist()),  # Convert list to string
+                            str([i for i in np.around(obs.rho[np.where(obs.rho > 1)], 2)]),  # Convert list to string
+                            action.as_dict()['change_bus_vect']['modif_subs_id'][0], 
+                            str(act_or),  # Convert list to string
+                            str(act_ex),  # Convert list to string
+                            str(act_gen),  # Convert list to string
+                            str(act_load),  # Convert list to string
+                            float(obs.rho.max()),  # Ensure numeric values are floats
+                            int(obs.rho.argmax()),  # Ensure indexes are integers
+                            float(obs_.rho.max()),  # Ensure numeric values are floats
+                            int(obs_.rho.argmax())  # Ensure indexes are integers
+                        ]
+                    ).reshape([1, -1])
+                ),
                 pd.DataFrame(np.concatenate((obs.to_vect(), obs_.to_vect(), action.to_vect())).reshape([1, -1]))
             ),
             axis=1
@@ -87,10 +91,10 @@ class Teacher:
 
 
 
-    def generate(self):
+    def generate(self, LINES2ATTACK):
         for episode in range(self.NUM_EPISODES):
             # traverse all attacks
-            for line_to_disconnect in self.LINES2ATTACK:
+            for line_to_disconnect in LINES2ATTACK:
                 try:
                     # if lightsim2grid is available, use it.
                     from lightsim2grid import LightSimBackend
