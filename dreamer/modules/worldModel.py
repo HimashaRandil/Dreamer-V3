@@ -115,16 +115,25 @@ class Trainer:
             posterior_dist = outputs['posterior_dist']
             prior_dist = outputs['prior_dist']
 
-            # Stop gradient for the posterior distribution
-            posterior_dist_stopped = posterior_dist.detach()
+            posterior_dist_stopped = torch.distributions.Normal(
+            posterior_dist.loc.detach(),  # Detach the mean
+            posterior_dist.scale.detach()  # Detach the standard deviation
+            )
+
+            prior_dist_stopped = torch.distributions.Normal(
+                prior_dist.loc.detach(),  # Detach the mean
+                prior_dist.scale.detach()  # Detach the standard deviation
+            )
+
+            dynamic_loss = torch.distributions.kl_divergence(posterior_dist_stopped, prior_dist).sum(dim=-1).mean()
+            dynamic_loss = torch.clamp(dynamic_loss, min=self.config.free_bits_threshold)
+
+            rep_loss = torch.distributions.kl_divergence(posterior_dist, prior_dist_stopped).sum(dim=-1).mean()
+            rep_loss = torch.clamp(rep_loss, min=self.config.free_bits_threshold)
             
-            kl_div = torch.distributions.kl_divergence(posterior_dist, prior_dist).mean()
-            
-            # Apply free bits by clipping the KL divergence
-            kl_div = torch.clamp(kl_div, min=self.config.free_bits_threshold)
 
             # Total Loss
-            total_loss = recon_loss + reward_loss + continue_loss + self.config.kl_weight * kl_div
+            total_loss = recon_loss + reward_loss + continue_loss + self.config.kl_weight * dynamic_loss + self.config.kl_weight * rep_loss
             
             # Backpropagation
             self.optimizer.zero_grad()
@@ -132,7 +141,7 @@ class Trainer:
             self.optimizer.step()
 
 
-            print(f"Total Loss: {total_loss.item()}, Recon Loss: {recon_loss.item()}, Reward Loss: {reward_loss.item()}, Continue Loss: {continue_loss.item()}, KL Loss: {kl_div.item()}")
+            print(f"Total Loss: {total_loss.item()}, Recon Loss: {recon_loss.item()}, Reward Loss: {reward_loss.item()}, Continue Loss: {continue_loss.item()}, Dynamic KL Loss: {dynamic_loss.item()}, Representation loss : {rep_loss.item()}")
 
     
     def evaluate(self, data_loader):
