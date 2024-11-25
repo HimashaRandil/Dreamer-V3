@@ -26,7 +26,7 @@ class RewardPredictor(nn.Module):
         )
 
     def forward(self, latent_dim, hidden_dim):
-        x = torch.cat((latent_dim, hidden_dim), dim=-1)
+        x = torch.cat([latent_dim, hidden_dim], dim=-1)
         x = self.network(x)
         
         # Split the output into mean and log-variance

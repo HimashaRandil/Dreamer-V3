@@ -31,7 +31,7 @@ class RSSM(nn.Module):
         assert action.shape[1] == self.config.action_dim, f"Expected action size {self.config.action_dim}, got {action.shape[1]}"
 
 
-        x = torch.cat((obs, hidden_state), dim=-1)
+        x = torch.cat([obs, hidden_state], dim=-1)
         assert x.shape[1] == self.config.input_dim + self.config.hidden_dim
 
         z, dist = self.e_model(x)
