@@ -65,6 +65,7 @@ class ActorNetwork(nn.Module):
         activation: nn.Module = nn.ELU, epsilon: float = 1e-3):
 
         super().__init__()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.action_dim = action_dim
         norm = nn.LayerNorm if layer_norm else NoNorm
 
@@ -176,7 +177,7 @@ class ActorNetwork(nn.Module):
 
 
 class CriticNetwork(nn.Module):
-    def __init__(self, obs_dim, action_dim, hidden_dim=400):
+    def __init__(self, obs_dim, action_dim, hidden_dim=400, num_buckets: int = 255):
         """
         Critic Network
         
@@ -184,10 +185,13 @@ class CriticNetwork(nn.Module):
             obs_dim (int): Dimension of the observation space
             action_dim (int): Dimension of the action space
             hidden_dim (int): Dimension of hidden layers
+            num_buckets: Number of buckets for value discretization
 
         """
 
         super().__init__()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.num_buckets = num_buckets
 
         # Feature extraction layers
         self.feature_net = nn.Sequential(
@@ -222,15 +226,23 @@ class CriticNetwork(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ELU(),
-            nn.Linear(hidden_dim, 1)
+            nn.Linear(hidden_dim, num_buckets, bias=False)
         )
         
         self.risk_head = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ELU(),
-            nn.Linear(hidden_dim, 1)
+            nn.Linear(hidden_dim, 1, bias=False)
         )
+
+        # Initialize output layers to zero
+        self._initialize_zero_weights()
+        
+    def _initialize_zero_weights(self):
+        """Initialize output layer weights to zero as per Dreamer v3."""
+        nn.init.zeros_(self.value_head[-1].weight)
+        nn.init.zeros_(self.risk_head[-1].weight)
 
 
     def forward(self, obs, action):
@@ -242,8 +254,16 @@ class CriticNetwork(nn.Module):
             action (torch.Tensor): Action tensor
             
         Returns:
-            tuple: (value prediction, risk prediction)
+            Tuple of:
+                - value: Expected value computed from bucket distribution
+                - risk: Risk prediction
         """
+
+        # Convert discrete action to one-hot if needed
+        # if action.dim() == 1:
+        #     action = F.one_hot(action, num_classes=self.action_net[0].in_features).float()
+
+            
         # Extract features from observation
         features = self.feature_net(obs)
         
@@ -255,8 +275,13 @@ class CriticNetwork(nn.Module):
         combined_features = self.combined_net(combined)
         
         # Predict value and risk
-        value = self.value_head(combined_features)
+        value_logits = self.value_head(combined_features)
         risk = self.risk_head(combined_features)
+
+        # Convert value distribution to scalar value
+        value_probs = F.softmax(value_logits, dim=-1)
+        bucket_values = torch.linspace(-20, 20, self.num_buckets, device=obs.device)
+        value = (value_probs * bucket_values).sum(dim=-1, keepdim=True)
         
         return value, risk
 
@@ -290,9 +315,14 @@ class CriticNetwork(nn.Module):
 
 
 
-        #  Following is an additional Actor network thats under construction 
 
 
+
+
+# ----------------------------------------------------------------------------------------------------------------------- # 
+
+
+#  Following is an additional Actor network thats under construction 
 class DreamerV3Actor(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim, latent_dim, recurrent=False, activation=nn.Tanh):
         super(DreamerV3Actor, self).__init__()
