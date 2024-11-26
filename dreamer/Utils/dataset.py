@@ -63,7 +63,7 @@ class GrdiDataset(Dataset):
     def __init__(self, observations, rewards, actions, dones, next_observations, device):
         self.observations = torch.tensor(np.array(observations, np.float32), dtype=torch.float32, device=device)
         self.rewards = torch.tensor(np.array(rewards, np.float32), dtype=torch.float32, device=device)
-        self.actions = torch.tensor(np.array(actions, np.float32), dtype=torch.long, device=device)  # Assuming discrete actions
+        self.actions = torch.tensor(actions, dtype=torch.int32, device=device)  # Assuming discrete actions
         self.dones = torch.tensor(np.array(dones, np.float32), dtype=torch.float32, device=device)  # Done flags as float
         self.next_observations = torch.tensor(np.array(next_observations, np.float32), dtype=torch.float32, device=device)
         
