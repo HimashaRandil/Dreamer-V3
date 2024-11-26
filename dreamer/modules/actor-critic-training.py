@@ -4,8 +4,9 @@ import torch.nn.functional as F
 import numpy as np
 from typing import Tuple, Dict
 
+from dreamer.modules.worldModel import WorldModel
 
-from networks import ActorNetwork, CriticNetwork
+from dreamer.modules.networks import ActorNetwork, CriticNetwork
 
 
 ''' ----- Code Under Development----'''
@@ -14,46 +15,62 @@ from networks import ActorNetwork, CriticNetwork
 class DreamerTrainer:
     def __init__(
         self,
-        world_model: nn.Module,
-        actor: ActorNetwork,
-        critic: CriticNetwork,
+        world_model: WorldModel,
+        # actor: ActorNetwork,
+        # critic: CriticNetwork,
         # critic: nn.Module,
-        horizon: int = 16,  # T=16 from paper
-        gamma: float = 0.997,  # From paper
-        lambda_gae: float = 0.95,
-        entropy_scale: float = 3e-4,  # η from paper
-        critic_ema_decay: float = 0.995,
-        num_buckets: int = 255,  # K from paper
+        config,
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
     ):
+        self.config =  config 
         self.world_model = world_model
-        self.actor = actor
-        self.critic = critic
+        #self.actor = actor
+        #self.critic = critic
         
         # Initialize critic target network (EMA)
         # self.critic_target = type(critic)(*critic.__init_args__).to(device)
-        self.critic_target = CriticNetwork(
-            obs_dim=critic.feature_net[0].in_features,
-            action_dim=critic.action_net[0].in_features,
-            hidden_dim=400,
-            num_buckets=num_buckets
+
+        self.actor = ActorNetwork(
+            in_dim=self.config.input_dim + self.config.hidden_dim,
+            action_dim=self.config.action_dim,
+            hidden_dim=self.config.hidden_dim,
+            hidden_layers=self.config.hidden_layers,
+            layer_norm=True,
+            activation=nn.ELU,                  # default from ActorNetwork
+            epsilon=self.config.actor_epsilon 
         ).to(device)
-        self.critic_target.load_state_dict(critic.state_dict())
+
+        self.critic = CriticNetwork(
+            obs_dim=self.config.input_dim,
+            action_dim=self.config.action_dim,
+            hidden_dim=400,
+            num_buckets=self.config.num_buckets
+        ).to(device)
+
+        self.critic_target= CriticNetwork(
+            obs_dim=self.config.input_dim,
+            action_dim=self.config.action_dim,
+            hidden_dim=400,
+            num_buckets=self.config.num_buckets
+        ).to(device)
+
+        self.critic_target.load_state_dict(self.critic.state_dict())
         
-        self.horizon = horizon
-        self.gamma = gamma
-        self.lambda_gae = lambda_gae
-        self.entropy_scale = entropy_scale
-        self.critic_ema_decay = critic_ema_decay
+
+        self.horizon = self.config.horizon
+        self.gamma = self.config.gamma
+        self.lambda_gae = self.config.lambda_gae
+        self.entropy_scale = self.config.entropy_scale
+        self.critic_ema_decay = self.config.critic_ema_decay
         self.device = device
         
         # Setup value discretization
-        self.num_buckets = num_buckets
-        self.bucket_values = torch.linspace(-20, 20, num_buckets).to(device)
+        self.num_buckets = self.config.num_buckets
+        self.bucket_values = torch.linspace(-20, 20, self.config.num_buckets).to(device)
         
         # Optimizers
-        self.actor_optimizer = torch.optim.Adam(actor.parameters(), lr=3e-4)
-        self.critic_optimizer = torch.optim.Adam(critic.parameters(), lr=3e-4)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.actor_critic_lr)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.config.actor_critic_lr)
         
         # Running statistics for return normalization
         self.return_ema = None
