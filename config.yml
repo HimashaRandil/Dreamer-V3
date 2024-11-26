@@ -19,9 +19,11 @@ learning_rate : 1e-4
 free_bits_threshold : 1e-6
 kl_weight : 1e-2
 path : "dreamer\\models"
-horizon:  16 
-gamma: 0.997
-lambda_gae: 0.95
-entropy_scale: 0.0003
-critic_ema_decay: 0.995
-num_buckets: 255
+horizon :  16 
+gamma : 0.997
+lambda_gae : 0.95
+entropy_scale : 0.0003
+critic_ema_decay : 0.995
+num_buckets : 255
+actor_epsilon : 0.003
+actor_critic_lr : 0.0003
