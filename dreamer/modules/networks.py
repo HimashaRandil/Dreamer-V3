@@ -245,6 +245,14 @@ class CriticNetwork(nn.Module):
         nn.init.zeros_(self.risk_head[-1].weight)
 
 
+    def _process_action(self, action: torch.Tensor) -> torch.Tensor:
+        """Process action input to correct format."""
+        if action.dim() == 1:
+            # Convert discrete action to one-hot
+            return F.one_hot(action, num_classes=self.action_dim).float()
+        return action
+
+
     def forward(self, obs, action):
         """
         Forward pass of the critic network.
@@ -259,10 +267,8 @@ class CriticNetwork(nn.Module):
                 - risk: Risk prediction
         """
 
-        # Convert discrete action to one-hot if needed
-        # if action.dim() == 1:
-        #     action = F.one_hot(action, num_classes=self.action_net[0].in_features).float()
-
+        # Process action to one-hot if needed
+        # action = self._process_action(action)
             
         # Extract features from observation
         features = self.feature_net(obs)
@@ -284,6 +290,13 @@ class CriticNetwork(nn.Module):
         value = (value_probs * bucket_values).sum(dim=-1, keepdim=True)
         
         return value, risk
+    
+    def get_value_distribution(self, states, actions):
+        features = self.feature_net(states)
+        action_features = self.action_net(actions)
+        combined = torch.cat([features, action_features], dim=-1)
+        combined_features = self.combined_net(combined)
+        return self.value_head(combined_features)
 
     def predict_value(self, obs, action):
         """
