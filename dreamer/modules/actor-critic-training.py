@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from typing import Tuple, Dict
 
+
 from networks import ActorNetwork, CriticNetwork
 
 
@@ -30,7 +31,13 @@ class DreamerTrainer:
         self.critic = critic
         
         # Initialize critic target network (EMA)
-        self.critic_target = type(critic)(*critic.__init_args__).to(device)
+        # self.critic_target = type(critic)(*critic.__init_args__).to(device)
+        self.critic_target = CriticNetwork(
+            obs_dim=critic.feature_net[0].in_features,
+            action_dim=critic.action_net[0].in_features,
+            hidden_dim=400,
+            num_buckets=num_buckets
+        ).to(device)
         self.critic_target.load_state_dict(critic.state_dict())
         
         self.horizon = horizon
