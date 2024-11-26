@@ -48,15 +48,15 @@ class WorldModel(nn.Module):
     def forward(self, obs, hidden_state, action):
         z_prior, z_posterior, h, dist, dynamic_dist = self.rssm(obs, hidden_state, action)   #Dynamics Predictor: Provides the prior distribution
 
-        reconstructed_obs = self.decoder(z_posterior, h)
-        reward = self.reward_predictor(z_posterior, h)
-        continue_prob = self.continue_predictor(z_posterior, h)
+        reconstructed_obs = self.decoder(z_posterior, hidden_state)
+        reward = self.reward_predictor(z_posterior, hidden_state)
+        continue_prob = self.continue_predictor(z_posterior, hidden_state)
 
         return {
             'prior_dist': dynamic_dist,
             'posterior_dist': dist,
             'reconstructed_obs': reconstructed_obs,
-            'reward': reward,
+            'reward': reward.rsample(),
             'continue_prob': continue_prob,
             'hidden_state': h
         }
@@ -87,62 +87,97 @@ class Trainer:
 
     
     def train(self, data_loader):
-        for obs, actions, rewards, dones, next_obs in data_loader:  
-            obs, actions, rewards, dones, next_obs = obs.to(self.model.device), actions.to(self.model.device), rewards.to(self.model.device), dones.to(self.model.device), next_obs.to(self.model.device)
-        
-            hidden_state, action = self.model.rssm.recurrent_model_input_init()
+        for i in range(self.config.epochs):
+            total_recon_loss = 0.0
+            total_reward_loss = 0.0
+            total_continue_loss = 0.0
+            total_dynamic_loss = 0.0
+            total_rep_loss = 0.0
+            total_loss = 0.0
+            loop_count = 0
 
-            outputs = self.model(obs, hidden_state, action)
-            #hidden_state = outputs['h']
-
-            # Calculate Posterior (using next_obs with Encoder)
-            #z_posterior, posterior_dist = self.model.e_model(torch.cat((next_obs, hidden_state), dim=-1))
-
-            # Calculate losses
-            # Reconstruction Loss for Decoder
-            reconstructed_obs = outputs['reconstructed_obs']
-            recon_loss = F.mse_loss(reconstructed_obs, obs)
-
-            # Reward Predictor Loss
-            reward_pred = outputs['reward']
-            reward_loss = F.mse_loss(reward_pred, rewards)
-
-            # Continue Predictor Loss (Binary Cross-Entropy)
-            continue_pred = outputs['continue_prob']
-            continue_loss = F.binary_cross_entropy_with_logits(continue_pred, dones.float())
-
-            # KL Divergence Loss
-            posterior_dist = outputs['posterior_dist']
-            prior_dist = outputs['prior_dist']
-
-            posterior_dist_stopped = torch.distributions.Normal(
-            posterior_dist.loc.detach(),  # Detach the mean
-            posterior_dist.scale.detach()  # Detach the standard deviation
-            )
-
-            prior_dist_stopped = torch.distributions.Normal(
-                prior_dist.loc.detach(),  # Detach the mean
-                prior_dist.scale.detach()  # Detach the standard deviation
-            )
-
-            dynamic_loss = torch.distributions.kl_divergence(posterior_dist_stopped, prior_dist).sum(dim=-1).mean()
-            dynamic_loss = torch.clamp(dynamic_loss, min=self.config.free_bits_threshold)
-
-            rep_loss = torch.distributions.kl_divergence(posterior_dist, prior_dist_stopped).sum(dim=-1).mean()
-            rep_loss = torch.clamp(rep_loss, min=self.config.free_bits_threshold)
+            for loop_count, (obs, rewards, actions, dones, next_obs) in enumerate(data_loader, start=1):  
+                obs, rewards, actions, dones, next_obs = obs.to(self.model.device), rewards.to(self.model.device), actions.to(self.model.device), dones.unsqueeze(1).to(self.model.device), next_obs.to(self.model.device)
             
+                hidden_state, _ = self.model.rssm.recurrent_model_input_init()
 
-            # Total Loss
-            total_loss = recon_loss + reward_loss + continue_loss + self.config.kl_weight * dynamic_loss + self.config.kl_weight * rep_loss
+                outputs = self.model(obs, hidden_state, actions)
+                #hidden_state = outputs['h']
+
+                # Calculate Posterior (using next_obs with Encoder)
+                #z_posterior, posterior_dist = self.model.e_model(torch.cat((next_obs, hidden_state), dim=-1))
+
+                # Calculate losses
+                # Reconstruction Loss for Decoder
+                reconstructed_obs = outputs['reconstructed_obs']
+                recon_loss = F.mse_loss(reconstructed_obs, obs)
+
+                # Reward Predictor Loss
+                reward_pred = outputs['reward']
+                reward_loss = F.mse_loss(reward_pred, rewards)
+
+                # Continue Predictor Loss (Binary Cross-Entropy)
+                continue_pred = outputs['continue_prob']
+                continue_loss = F.binary_cross_entropy_with_logits(dones, continue_pred)
+
+                # KL Divergence Loss
+                posterior_dist = outputs['posterior_dist']
+                prior_dist = outputs['prior_dist']
+
+                posterior_dist_stopped = torch.distributions.Normal(
+                posterior_dist.loc.detach(),  # Detach the mean
+                posterior_dist.scale.detach()  # Detach the standard deviation
+                )
+
+                prior_dist_stopped = torch.distributions.Normal(
+                    prior_dist.loc.detach(),  # Detach the mean
+                    prior_dist.scale.detach()  # Detach the standard deviation
+                )
+
+                dynamic_loss = torch.distributions.kl_divergence(posterior_dist_stopped, prior_dist).sum(dim=-1).mean()
+                #dynamic_loss = torch.clamp(dynamic_loss, min=self.config.free_bits_threshold)
+
+                rep_loss = torch.distributions.kl_divergence(posterior_dist, prior_dist_stopped).sum(dim=-1).mean()
+                #rep_loss = torch.clamp(rep_loss, min=self.config.free_bits_threshold)
+                
+                #print(f"reconstruct: {recon_loss}")
+                #print(f"reward : {reward_loss}")
+                #print(f"Continue : {continue_loss}")
+                #print(f"kl weight : {self.config.kl_weight}")
+                # Total Loss
+                total_loss = recon_loss + reward_loss + continue_loss + float(self.config.kl_weight) * dynamic_loss + float(self.config.kl_weight) * rep_loss
+                
+                total_recon_loss += recon_loss.item()
+                total_reward_loss += reward_loss.item()
+                total_continue_loss += continue_loss.item()
+                total_dynamic_loss += dynamic_loss.item()
+                total_rep_loss += rep_loss.item()
+                total_loss += total_loss.item()
+
+                self.optimizer.zero_grad()
+                total_loss.backward()
+                self.optimizer.step()
+
+            # Calculate average losses for the epoch
+            avg_recon_loss = total_recon_loss / loop_count
+            avg_reward_loss = total_reward_loss / loop_count
+            avg_continue_loss = total_continue_loss / loop_count
+            avg_dynamic_loss = total_dynamic_loss / loop_count
+            avg_rep_loss = total_rep_loss / loop_count
+            avg_total_loss = total_loss / loop_count
+
+
+            print(
+            f"Epoch {i + 1}/{self.config.epochs}: "
+            f"Avg Total Loss = {avg_total_loss:.4f}, "
+            f"Avg Recon Loss = {avg_recon_loss:.4f}, "
+            f"Avg Reward Loss = {avg_reward_loss:.4f}, "
+            f"Avg Continue Loss = {avg_continue_loss:.4f}, "
+            f"Avg Dynamic KL Loss = {avg_dynamic_loss:.4f}, "
+            f"Avg Representation Loss = {avg_rep_loss:.4f}"
+        )
             
-            # Backpropagation
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            self.optimizer.step()
-
-
-            print(f"Total Loss: {total_loss.item()}, Recon Loss: {recon_loss.item()}, Reward Loss: {reward_loss.item()}, Continue Loss: {continue_loss.item()}, Dynamic KL Loss: {dynamic_loss.item()}, Representation loss : {rep_loss.item()}")
-
+            
     
     def evaluate(self, data_loader):
         self.model.eval()
