@@ -87,7 +87,7 @@ class Trainer:
 
     
     def train(self, data_loader):
-        for i in range(self.config.epochs):
+        for i in range(1):
             total_recon_loss = 0.0
             total_reward_loss = 0.0
             total_continue_loss = 0.0
@@ -99,6 +99,7 @@ class Trainer:
             for loop_count, (obs, rewards, actions, dones, next_obs) in enumerate(data_loader, start=1):  
                 obs, rewards, actions, dones, next_obs = obs.to(self.model.device), rewards.to(self.model.device), actions.to(self.model.device), dones.unsqueeze(1).to(self.model.device), next_obs.to(self.model.device)
             
+
                 hidden_state, _ = self.model.rssm.recurrent_model_input_init()
 
                 outputs = self.model(obs, hidden_state, actions)
