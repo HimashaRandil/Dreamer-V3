@@ -26,15 +26,15 @@ def one_hot_encode(actions, num_actions):
     return np.array(one_hot_actions)
 
 
-def load_npz_files_from_folder(folder_path):
+def load_npz_files_from_folder(folder_path, start=0, end=100):
     all_observations = []
     all_rewards = []
     all_actions = []
     all_dones = []
     all_next_observations = []
-    
+    folder = os.listdir(folder_path)
     # Iterate through all .npz files in the folder
-    for filename in os.listdir(folder_path):
+    for filename in folder[start:end]:
         if filename.endswith(".npz"):
             file_path = os.path.join(folder_path, filename)
             npz_data = np.load(file_path, allow_pickle=True)
@@ -75,15 +75,37 @@ class GrdiDataset(Dataset):
 
 
 
+import os
+import numpy as np
+import torch
+
+def one_hot_encode(actions, num_actions):
+    """
+    Convert an array of actions into one-hot encoding.
+    
+    Args:
+    - actions (np.array): Array of integer actions.
+    - num_actions (int): Total number of possible actions (size of action space).
+    
+    Returns:
+    - np.array: One-hot encoded actions, shape (num_samples, num_actions).
+    """
+    actions = np.array(actions)  
+    one_hot_actions = np.zeros((len(actions), num_actions), dtype=np.float32)
+    one_hot_actions[np.arange(len(actions)), actions] = 1
+    return np.array(one_hot_actions)
+
 class LazyGrdiBatchLoader:
-    def __init__(self, folder_path, batch_size, device):
+    def __init__(self, folder_path, config, device, drop_last=True):
+        self.config = config
         self.folder_path = folder_path
         self.files = sorted([f for f in os.listdir(folder_path) if f.endswith('.npz')])  # Sort to load files in order
-        self.batch_size = batch_size
+        self.batch_size = self.config.batch_size
         self.device = device
         self.current_data = None
         self.current_index = 0
         self.file_idx = 0
+        self.drop_last = drop_last
 
     def _load_next_file(self):
         if self.file_idx >= len(self.files):
@@ -98,7 +120,7 @@ class LazyGrdiBatchLoader:
         return {
             "obs": torch.tensor(np.array(npz_data['obs'], np.float32), dtype=torch.float32, device=self.device),
             "rewards": torch.tensor(np.array(npz_data['reward'], np.float32), dtype=torch.float32, device=self.device),
-            "actions": torch.tensor(one_hot_encode(npz_data['action'], config.action_dim), dtype=torch.int32, device=self.device),
+            "actions": torch.tensor(one_hot_encode(npz_data['action'], self.config.action_dim), dtype=torch.int32, device=self.device),
             "dones": torch.tensor(np.array(npz_data['done'], np.float32), dtype=torch.float32, device=self.device) ,
             "next_obs": torch.tensor(np.array(npz_data['obs_next'], np.float32), dtype=torch.float32, device=self.device),
         }
@@ -107,22 +129,38 @@ class LazyGrdiBatchLoader:
         return self
 
     def __next__(self):
-        # Load new file if current data is exhausted
-        if self.current_data is None or self.current_index >= len(self.current_data['obs']):
-            self.current_data = self._load_next_file()
-            if self.current_data is None:
-                raise StopIteration  # No more data to iterate over
+        while True:
+            # Load new file if current data is exhausted
+            if self.current_data is None or self.current_index >= len(self.current_data['obs']):
+                self.current_data = self._load_next_file()
+                if self.current_data is None:
+                    raise StopIteration  # No more data to iterate over
 
-        # Select the batch
-        start_idx = self.current_index
-        end_idx = min(self.current_index + self.batch_size, len(self.current_data['obs']))
-        self.current_index = end_idx
+            # Select the batch
+            start_idx = self.current_index
+            end_idx = min(self.current_index + self.batch_size, len(self.current_data['obs']))
+            self.current_index = end_idx
 
-        batch = {
-            "obs": self.current_data["obs"][start_idx:end_idx],
-            "rewards": self.current_data["rewards"][start_idx:end_idx],
-            "actions": self.current_data["actions"][start_idx:end_idx],
-            "dones": self.current_data["dones"][start_idx:end_idx],
-            "next_obs": self.current_data["next_obs"][start_idx:end_idx],
-        }
-        return batch
+            # Check batch size and skip if smaller than required and drop_last=True
+            if self.drop_last and (end_idx - start_idx) < self.batch_size:
+                continue
+
+            batch = {
+                "obs": self.current_data["obs"][start_idx:end_idx],
+                "rewards": self.current_data["rewards"][start_idx:end_idx],
+                "actions": self.current_data["actions"][start_idx:end_idx],  # One-hot encoded actions
+                "dones": self.current_data["dones"][start_idx:end_idx],
+                "next_obs": self.current_data["next_obs"][start_idx:end_idx],
+            }
+            return batch
+
+"""
+folder_path = "dreamer\\data_generation\\temp"
+batch_size = 32
+num_actions = 10  # Number of possible actions
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+data_loader = LazyGrdiBatchLoader(folder_path, batch_size, device, num_actions, drop_last=True)
+
+for batch in data_loader:
+    print(f"obs shape: {batch['obs'].shape}")"""
