@@ -72,3 +72,57 @@ class GrdiDataset(Dataset):
     
     def __getitem__(self, idx):
         return (self.observations[idx], self.rewards[idx], self.actions[idx], self.dones[idx], self.next_observations[idx])
+
+
+
+class LazyGrdiBatchLoader:
+    def __init__(self, folder_path, batch_size, device):
+        self.folder_path = folder_path
+        self.files = sorted([f for f in os.listdir(folder_path) if f.endswith('.npz')])  # Sort to load files in order
+        self.batch_size = batch_size
+        self.device = device
+        self.current_data = None
+        self.current_index = 0
+        self.file_idx = 0
+
+    def _load_next_file(self):
+        if self.file_idx >= len(self.files):
+            return None  # No more files to load
+
+        file_path = os.path.join(self.folder_path, self.files[self.file_idx])
+        npz_data = np.load(file_path, allow_pickle=True)
+        self.file_idx += 1
+        self.current_index = 0  # Reset index for new file
+
+        print(f"Loading file: {file_path}")
+        return {
+            "obs": torch.tensor(np.array(npz_data['obs'], np.float32), dtype=torch.float32, device=self.device),
+            "rewards": torch.tensor(np.array(npz_data['reward'], np.float32), dtype=torch.float32, device=self.device),
+            "actions": torch.tensor(one_hot_encode(npz_data['action'], config.action_dim), dtype=torch.int32, device=self.device),
+            "dones": torch.tensor(np.array(npz_data['done'], np.float32), dtype=torch.float32, device=self.device) ,
+            "next_obs": torch.tensor(np.array(npz_data['obs_next'], np.float32), dtype=torch.float32, device=self.device),
+        }
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        # Load new file if current data is exhausted
+        if self.current_data is None or self.current_index >= len(self.current_data['obs']):
+            self.current_data = self._load_next_file()
+            if self.current_data is None:
+                raise StopIteration  # No more data to iterate over
+
+        # Select the batch
+        start_idx = self.current_index
+        end_idx = min(self.current_index + self.batch_size, len(self.current_data['obs']))
+        self.current_index = end_idx
+
+        batch = {
+            "obs": self.current_data["obs"][start_idx:end_idx],
+            "rewards": self.current_data["rewards"][start_idx:end_idx],
+            "actions": self.current_data["actions"][start_idx:end_idx],
+            "dones": self.current_data["dones"][start_idx:end_idx],
+            "next_obs": self.current_data["next_obs"][start_idx:end_idx],
+        }
+        return batch
