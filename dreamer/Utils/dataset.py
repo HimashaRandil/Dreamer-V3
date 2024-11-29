@@ -58,6 +58,24 @@ def load_npz_files_from_folder(folder_path, start=0, end=100):
     return observations, rewards, one_hot_actions, dones, next_observations
 
 
+def load_observation(folder_path, start=0, end=100):
+    all_observations = []
+    folder = os.listdir(folder_path)
+    # Iterate through all .npz files in the folder
+    for filename in folder[start:end]:
+        if filename.endswith(".npz"):
+            file_path = os.path.join(folder_path, filename)
+            npz_data = np.load(file_path, allow_pickle=True)
+            
+            all_observations.append(npz_data['obs'])
+    
+
+    # Concatenate all arrays along the first axis (stacking the data)
+    observations = np.concatenate(all_observations, axis=0)
+    
+    return observations
+
+
 
 class GrdiDataset(Dataset):
     def __init__(self, observations, rewards, actions, dones, next_observations, device):
