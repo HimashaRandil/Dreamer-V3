@@ -101,6 +101,9 @@ class Trainer:
             
 
                 hidden_state, _ = self.model.rssm.recurrent_model_input_init()
+                
+                assert torch.isfinite(obs).all(), "obs contains NaN or Inf"
+                assert torch.isfinite(hidden_state).all(), "hidden_state contains NaN or Inf"
 
                 outputs = self.model(obs, hidden_state, actions)
                 #hidden_state = outputs['h']
