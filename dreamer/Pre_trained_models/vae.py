@@ -37,6 +37,7 @@ class Encoder(nn.Module):
     
 
     def save(self, model_name="pre_trained_encoder"):
+        os.makedirs(self.config.pre_trained_path, exist_ok=True)
         torch.save(self.state_dict(), os.path.join(self.config.pre_trained_path, model_name))
         print(f"model saved at {self.config.pre_trained_path}")
 
@@ -73,6 +74,7 @@ class Decoder(nn.Module):
         return actual
     
     def save(self, model_name="pre_trained_decoder"):
+        os.makedirs(self.config.pre_trained_path, exist_ok=True)
         torch.save(self.state_dict(), os.path.join(self.config.pre_trained_path, model_name))
         print(f"model saved at {self.config.pre_trained_path}")
 
@@ -102,6 +104,7 @@ class VAE(nn.Module):
         return reconstructed, dist
 
     def save(self, model_name="vae"):
+        os.makedirs(self.config.pre_trained_path, exist_ok=True)
         torch.save(self.state_dict(), os.path.join(self.config.pre_trained_path, model_name))
         self.encoder.save()
         self.decoder.save()
