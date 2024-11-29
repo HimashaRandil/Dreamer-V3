@@ -76,6 +76,19 @@ def load_observation(folder_path, start=0, end=100):
     return observations
 
 
+class ObservationDataset(Dataset):
+    def __init__(self, observations, device):
+        self.observations = torch.tensor(np.array(observations, np.float32), dtype=torch.float32, device=device)
+        
+    def __len__(self):
+        return len(self.observations)
+    
+    def __getitem__(self, idx):
+        return (self.observations[idx])
+
+
+
+
 
 class GrdiDataset(Dataset):
     def __init__(self, observations, rewards, actions, dones, next_observations, device):
