@@ -27,6 +27,8 @@ class Encoder(nn.Module):
         # Get encoder output
         latent_params = self.encoder(x)
         mean, log_var = torch.chunk(latent_params, 2, dim=-1)
+
+        log_var = torch.clamp(log_var, min=-10, max=10) # for avoid nan value return and numerical stability
         std = torch.exp(0.5 * log_var)
         dist = torch.distributions.Normal(mean, std)
 
