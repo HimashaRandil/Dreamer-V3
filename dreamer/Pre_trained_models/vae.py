@@ -67,8 +67,8 @@ class Decoder(nn.Module):
             self.config.pre_trained_path = kwargs.get('path')
 
 
-    def forward(self, z, h):
-        x = torch.cat((z, h), dim=-1)
+    def forward(self, x):
+        #x = torch.cat((z, h), dim=-1)
         actual = self.decoder(x)
         return actual
     
@@ -92,12 +92,12 @@ class VAE(nn.Module):
         if kwargs.get('path'):
             self.config.pre_trained_path = kwargs.get('path')
 
-    def forward(self, x, h):
+    def forward(self, x):
         # Pass through encoder to get latent representation
         z, dist = self.encoder(x)
         
         # Reconstruct through decoder
-        reconstructed = self.decoder(z, h)
+        reconstructed = self.decoder(z)
         
         return reconstructed, dist
 
@@ -131,6 +131,8 @@ def train_vae(vae, data_loader, epochs, lr=1e-3, device='cuda'):
     optimizer = optim.Adam(vae.parameters(), lr=lr)
     vae.to(device)
 
+    best_loss = float('inf')  
+
     for epoch in range(epochs):
         vae.train()
         total_loss = 0
@@ -153,5 +155,11 @@ def train_vae(vae, data_loader, epochs, lr=1e-3, device='cuda'):
 
         avg_loss = total_loss / len(data_loader)
         print(f"Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}")
+
+        # Save the model if it improves
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            vae.save()
+            print(f"New best model saved with loss: {best_loss:.4f}")
 
     print("Training Complete")
