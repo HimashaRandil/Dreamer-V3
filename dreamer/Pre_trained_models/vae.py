@@ -114,3 +114,44 @@ class VAE(nn.Module):
 
 
 
+def vae_loss_function(reconstructed, original, dist):
+    """Calculate VAE loss: Reconstruction Loss + KL Divergence."""
+    reconstruction_loss = nn.MSELoss()(reconstructed, original)  # L2 loss
+    mean, std = dist.mean, dist.stddev
+    
+    # KL Divergence: Measure divergence between approximate posterior and prior.
+    kl_divergence = -0.5 * torch.sum(1 + torch.log(std**2) - mean**2 - std**2, dim=-1).mean()
+
+    return reconstruction_loss + kl_divergence
+
+
+
+
+def train_vae(vae, data_loader, epochs, lr=1e-3, device='cuda'):
+    optimizer = optim.Adam(vae.parameters(), lr=lr)
+    vae.to(device)
+
+    for epoch in range(epochs):
+        vae.train()
+        total_loss = 0
+        for batch in data_loader:
+            # Assume batch is a tuple (input_data, auxiliary_hidden_state)
+            x = batch
+            x = x.to(device)
+
+            # Forward pass
+            reconstructed, dist = vae(x)
+
+            # Compute loss
+            loss = vae_loss_function(reconstructed, x, dist)
+            total_loss += loss.item()
+
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        avg_loss = total_loss / len(data_loader)
+        print(f"Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}")
+
+    print("Training Complete")
