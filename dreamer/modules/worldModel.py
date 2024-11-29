@@ -87,7 +87,7 @@ class Trainer:
 
     
     def train(self, data_loader):
-        for i in range(1):
+        for i in range(self.config.epochs):
             total_recon_loss = 0.0
             total_reward_loss = 0.0
             total_continue_loss = 0.0
@@ -136,10 +136,10 @@ class Trainer:
                 )
 
                 dynamic_loss = torch.distributions.kl_divergence(posterior_dist_stopped, prior_dist).sum(dim=-1).mean()
-                #dynamic_loss = torch.clamp(dynamic_loss, min=self.config.free_bits_threshold)
+                dynamic_loss = torch.clamp(dynamic_loss, min=float(self.config.free_bits_threshold))
 
                 rep_loss = torch.distributions.kl_divergence(posterior_dist, prior_dist_stopped).sum(dim=-1).mean()
-                #rep_loss = torch.clamp(rep_loss, min=self.config.free_bits_threshold)
+                rep_loss = torch.clamp(rep_loss, min=float(self.config.free_bits_threshold))
                 
                 #print(f"reconstruct: {recon_loss}")
                 #print(f"reward : {reward_loss}")
@@ -169,7 +169,7 @@ class Trainer:
 
 
             print(
-            f"Epoch {i + 1}/{self.config.epochs}: "
+            f"Epoch {i + 1} - {loop_count} /{self.config.epochs}: "
             f"Avg Total Loss = {avg_total_loss:.4f}, "
             f"Avg Recon Loss = {avg_recon_loss:.4f}, "
             f"Avg Reward Loss = {avg_reward_loss:.4f}, "
