@@ -6,7 +6,7 @@ import os
 
 
 class Encoder(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super(Encoder, self).__init__()
         self.config = config
         input_size = self.config.input_dim
@@ -22,6 +22,9 @@ class Encoder(nn.Module):
             nn.ReLU(),
             nn.Linear(input_dim//8, self.config.latent_dim*2)
         )
+
+        if kwargs.get('path'):
+            self.config.path = kwargs.get('path')
 
     def forward(self, x):
         # Get encoder output

@@ -10,15 +10,20 @@ from dreamer.modules.rewardModel import RewardPredictor
 
 
 class RSSM(nn.Module):
-    def __init__(self, config) -> None:
+    def __init__(self, config, **kwargs) -> None:
         super().__init__()
         self.config = config
         
+        if kwargs.get('path'):
+            path = kwargs.get('path') 
         
+            self.r_model = RecurrentModel(self.config, path=path)
+            self.d_model = DynamicPredictor(self.config, path=path)
+            self.e_model = Encoder(self.config, path=path)
+
         self.r_model = RecurrentModel(self.config)
         self.d_model = DynamicPredictor(self.config)
         self.e_model = Encoder(self.config)
-
 
     def recurrent_model_input_init(self):
         return self.r_model.input_init(), self.r_model.action_init()

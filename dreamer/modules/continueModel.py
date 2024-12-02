@@ -5,7 +5,7 @@ import os
 
 
 class ContinuousPredictor(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super(ContinuousPredictor, self).__init__()
 
         self.config = config
@@ -18,6 +18,9 @@ class ContinuousPredictor(nn.Module):
             nn.ReLU(),
             nn.Linear(16, 1)
         )
+
+        if kwargs.get('path'):
+            self.config.path = kwargs.get('path')
 
 
     def forward(self, latent_dim, hidden_dim):

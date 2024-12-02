@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import os
 
 class RecurrentModel(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super(RecurrentModel, self).__init__()
         
         self.latent_dim = config.latent_dim      # Dimension of the latent state z_t
@@ -19,6 +19,8 @@ class RecurrentModel(nn.Module):
         # Initialize a linear layer to project the concatenated input into the GRU input
         self.input_proj = nn.Linear(self.latent_dim + self.action_dim, self.latent_dim + self.action_dim)
 
+        if kwargs.get('path'):
+            self.config.path = kwargs.get('path')
 
     def forward(self, z_t, a_t, h_t_prev):
         combined_input = torch.cat([z_t, a_t], dim=-1)

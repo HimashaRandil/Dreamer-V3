@@ -6,7 +6,7 @@ import os
 
 
 class Decoder(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super(Decoder, self).__init__()
         self.config = config
         latent_dim = self.config.latent_dim
@@ -18,6 +18,9 @@ class Decoder(nn.Module):
             nn.ReLU(),
             nn.Linear(input_dim*2, self.config.input_dim)  # Outputs back to original input size
         )
+
+        if kwargs.get('path'):
+            self.config.path = kwargs.get('path')
 
 
     def forward(self, z, h):

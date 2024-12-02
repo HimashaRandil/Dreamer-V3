@@ -5,7 +5,7 @@ import os
 
 
 class DynamicPredictor(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super(DynamicPredictor, self).__init__()
 
         self.config = config
@@ -18,6 +18,9 @@ class DynamicPredictor(nn.Module):
             nn.ReLU(),
             nn.Linear(h // 2, self.config.latent_dim * 2)  # Output mean and log-variance
         )
+
+        if kwargs.get('path'):
+            self.config.path = kwargs.get('path')
 
     def forward(self, h_t):
         try:
