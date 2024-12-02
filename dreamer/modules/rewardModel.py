@@ -11,7 +11,7 @@ import os
 """
 
 class RewardPredictor(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super(RewardPredictor, self).__init__()
 
         self.config = config
@@ -24,6 +24,9 @@ class RewardPredictor(nn.Module):
             nn.ReLU(),
             nn.Linear(16, 2)
         )
+
+        if kwargs.get('path'):
+            self.config.path = kwargs.get('path')
 
     def forward(self, latent_dim, hidden_dim):
         x = torch.cat([latent_dim, hidden_dim], dim=-1)
