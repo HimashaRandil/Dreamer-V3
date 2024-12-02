@@ -15,10 +15,17 @@ from lightsim2grid import LightSimBackend
 
 
 class WorldModel(nn.Module):
-    def __init__(self, config) -> None:
+    def __init__(self, config, **kwargs) -> None:
         super(WorldModel, self).__init__()
-
         self.config = config
+        if kwargs.get('path'):
+            path = kwargs.get('path')
+
+            self.rssm = RSSM(config, path=path)
+            self.decoder = Decoder(config, path=path)
+            self.reward_predictor = RewardPredictor(config, path=path)
+            self.continue_predictor = ContinuousPredictor(config, path=path)
+
         self.rssm = RSSM(config)
         self.decoder = Decoder(config)
         self.reward_predictor = RewardPredictor(config)
@@ -172,7 +179,7 @@ class Trainer:
 
 
             print(
-            f"Epoch {i + 1} - {loop_count} /{self.config.epochs}: "
+            f"Epoch {i + 1}/{self.config.epochs}: "
             f"Avg Total Loss = {avg_total_loss:.4f}, "
             f"Avg Recon Loss = {avg_recon_loss:.4f}, "
             f"Avg Reward Loss = {avg_reward_loss:.4f}, "
