@@ -94,6 +94,7 @@ class Trainer:
 
     
     def train(self, data_loader):
+        best_loss = float('inf')
         for i in range(self.config.epochs):
             total_recon_loss = 0.0
             total_reward_loss = 0.0
@@ -187,7 +188,12 @@ class Trainer:
             f"Avg Dynamic KL Loss = {avg_dynamic_loss:.4f}, "
             f"Avg Representation Loss = {avg_rep_loss:.4f}"
         )
-            
+
+
+            if avg_total_loss < best_loss:
+                best_loss = avg_total_loss
+                self.model.save_world_model()
+                print(f"New best model saved with Avg Total Loss = {avg_total_loss:.4f}")   
             
     
     def evaluate(self, data_loader):
