@@ -76,12 +76,19 @@ class WorldModel(nn.Module):
         self.decoder.save()
         print(f"World Model saved at {self.config.path}")
 
-    def load_world_model(self):
-        self.rssm.load_rssm()
-        self.reward_predictor.load()
-        self.continue_predictor.load()
-        self.decoder.load()
-        print(f"World model loaded at {self.config.path}")
+    def load_world_model(self, custom_path=None):
+        if custom_path:
+            self.rssm.load_rssm(custom_path=custom_path)
+            self.reward_predictor.load(custom_path=custom_path)
+            self.continue_predictor.load(custom_path=custom_path)
+            self.decoder.load(custom_path=custom_path)
+            print(f"World model loaded at {custom_path}")
+        else:
+            self.rssm.load_rssm()
+            self.reward_predictor.load()
+            self.continue_predictor.load()
+            self.decoder.load()
+            print(f"World model loaded at {self.config.saved_model_path}")
     
 
 

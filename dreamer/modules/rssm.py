@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -50,9 +51,14 @@ class RSSM(nn.Module):
         self.d_model.save()
         self.e_model.save()
 
-    def load_rssm(self):
-        self.r_model.load()
-        self.e_model.load()
-        self.d_model.load()
+    def load_rssm(self, custom_path=None):
+        if custom_path:
+            self.r_model.load(custom_path=custom_path)
+            self.e_model.load(custom_path=custom_path)
+            self.d_model.load(custom_path=custom_path)
+        else:
+            self.r_model.load()
+            self.e_model.load()
+            self.d_model.load()
     
 

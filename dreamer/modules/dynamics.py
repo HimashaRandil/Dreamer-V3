@@ -40,5 +40,16 @@ class DynamicPredictor(nn.Module):
     def save(self, model_name="dynamic_predictor"):
         torch.save(self.state_dict(), os.path.join(self.config.path, model_name))
 
-    def load(self, model_name="dynamic_predictor"):
-        self.load_state_dict(torch.load(os.path.join(self.config.path, model_name)))
+    def load(self, model_name="dynamic_predictor", custom_path=None):
+        if custom_path:
+            model_path = os.path.join(custom_path, model_name)
+        else:
+            model_path = os.path.join(self.config.saved_model_path, model_name)
+    
+        try:
+            self.load_state_dict(torch.load(model_path))
+            print(f"Model loaded successfully from {model_path}")
+        except FileNotFoundError as e:
+            print(f"Error: {e}. Model file not found at {model_path}")
+        except Exception as e:
+            print(f"An error occurred while loading the model: {e}")
