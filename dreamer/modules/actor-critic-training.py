@@ -31,7 +31,7 @@ class DreamerTrainer:
         # self.critic_target = type(critic)(*critic.__init_args__).to(device)
 
         self.actor = ActorNetwork(
-            in_dim=self.config.input_dim + self.config.hidden_dim,
+            in_dim=self.config.latent_dim + self.config.hidden_dim,
             action_dim=self.config.action_dim,
             hidden_dim=self.config.hidden_dim,
             hidden_layers=self.config.hidden_layers,
@@ -41,14 +41,14 @@ class DreamerTrainer:
         ).to(device)
 
         self.critic = CriticNetwork(
-            obs_dim=self.config.input_dim,
+            obs_dim=config.latent_dim + config.hidden_dim,
             action_dim=self.config.action_dim,
             hidden_dim=400,
             num_buckets=self.config.num_buckets
         ).to(device)
 
         self.critic_target= CriticNetwork(
-            obs_dim=self.config.input_dim,
+            obs_dim=config.latent_dim + config.hidden_dim,
             action_dim=self.config.action_dim,
             hidden_dim=400,
             num_buckets=self.config.num_buckets
