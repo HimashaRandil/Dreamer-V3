@@ -17,12 +17,12 @@ def load_config(yaml_path):
 
 def generate_synthetic_episode(config, batch_size):
     """Generate synthetic episode data"""
-    states = torch.randn(config['horizon'], batch_size, config['input_dim'])
-    rewards = torch.randn(config['horizon'], batch_size, 1) * 0.1  # Small random rewards
-    dones = torch.zeros(config['horizon'], batch_size, 1)  # No episodes end
+    # Use combined dimension for states (zt + ht)
+    combined_dim = config['latent_dim'] + config['hidden_dim']  # 64 + 128 = 192
+    states = torch.randn(config['horizon'], batch_size, combined_dim)
+    rewards = torch.randn(config['horizon'], batch_size, 1) * 0.1
+    dones = torch.zeros(config['horizon'], batch_size, 1)
     return states, rewards, dones
-
-
 
 
 def test_actor_critic(config_path):
@@ -32,10 +32,15 @@ def test_actor_critic(config_path):
     # Set device and random seed
     device = torch.device(config['device'] if torch.cuda.is_available() else "cpu")
     torch.manual_seed(42)
+
+    # Combined input dimension for both networks
+    combined_dim = config['latent_dim'] + config['hidden_dim']  # 64 + 128 = 192
+    
+    print(f"Combined input dimension (zt + ht): {combined_dim}")
     
     # Initialize networks using config parameters
     actor = ActorNetwork(
-        in_dim=config['input_dim'],
+        in_dim=combined_dim,
         action_dim=config['action_dim'],
         hidden_dim=config['hidden_dim'],
         hidden_layers=2,  # You might want to add this to your config
@@ -45,7 +50,7 @@ def test_actor_critic(config_path):
     ).to(device)
     
     critic = CriticNetwork(
-        obs_dim=config['input_dim'],
+        obs_dim=combined_dim,
         action_dim=config['action_dim'],
         hidden_dim=config['hidden_dim'],
         num_buckets=config['num_buckets']
@@ -66,12 +71,25 @@ def test_actor_critic(config_path):
         # Generate synthetic episode
         states, rewards, dones = generate_synthetic_episode(config, batch_size)
         states, rewards, dones = states.to(device), rewards.to(device), dones.to(device)
+        # Print shapes for first episode
+        if episode == 0:
+            print("\nInitial shapes:")
+            print(f"States shape: {states.shape}")  # Should be [horizon, batch_size, 192]
+            print(f"Rewards shape: {rewards.shape}")
+            print(f"Dones shape: {dones.shape}\n")
         
         # Get actions and values
         with torch.no_grad():
             action_logits = actor(states)
+            print(f"\nAction logits shape: {action_logits.shape}")
+
             actions, _ = actor.sample_action(action_logits)
+            print(f"Actions shape: {actions.shape}")
+
             values, risks = critic(states, F.one_hot(actions, config['action_dim']).float())
+            print(f"Values shape: {values.shape}")
+            print(f"Risks shape: {risks.shape}")
+
         
         # Compute returns (simplified version without GAE)
         returns = torch.zeros_like(rewards)
@@ -92,8 +110,18 @@ def test_actor_critic(config_path):
         actor_optimizer.zero_grad()
         action_logits = actor(states)
         log_probs, entropy, _ = actor.evaluate_actions(action_logits, actions)
+        print(f"Log probs shape before reshape: {log_probs.shape}")
+        print(f"Entropy shape: {entropy.shape}")
         
         advantage = (returns - values).detach()
+        print(f"Advantage shape before reshape: {advantage.shape}")
+
+        log_probs = log_probs.reshape(config['horizon'], batch_size)
+        advantage = advantage.reshape(config['horizon'], batch_size)
+
+        print(f"Log probs shape after reshape: {log_probs.shape}")
+        print(f"Advantage shape after reshape: {advantage.shape}")
+
         actor_loss = -(log_probs * advantage).mean() - config['entropy_scale'] * entropy.mean()
         actor_loss.backward()
         actor_optimizer.step()
@@ -109,5 +137,5 @@ def test_actor_critic(config_path):
             print("-------------------")
 
 if __name__ == "__main__":
-    config_path = "config.yml"  # Make sure this points to your config.yml file
+    config_path = "E:\L2RPN\Dreamer_V3_Implimentation\Dreamer-V3\config.yml"  # Make sure this points to your config.yml file
     test_actor_critic(config_path)
