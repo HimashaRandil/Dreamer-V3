@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from typing import Tuple, Optional
+from typing import List 
 
 
 TensorTBCHW = Tensor
@@ -61,7 +62,7 @@ class ActorNetwork(nn.Module):
     - Proper handling of batched inputs
     
     '''
-    def __init__(self, in_dim: int, action_dim: int, hidden_dim: int, hidden_layers: int, layer_norm: bool = True,
+    def __init__(self, in_dim: int, action_dim: int, actor_hidden_dims: List[int], layer_norm: bool = True,
         activation: nn.Module = nn.ELU, epsilon: float = 1e-3):
 
         super().__init__()
@@ -72,7 +73,7 @@ class ActorNetwork(nn.Module):
         layers = []
         current_dim = in_dim
 
-        for _ in range(hidden_layers):
+        for hidden_dim in actor_hidden_dims:
             layers.extend([
                 nn.Linear(current_dim, hidden_dim),
                 norm(hidden_dim, eps=epsilon),
@@ -117,6 +118,7 @@ class ActorNetwork(nn.Module):
                 - actions: Sampled actions
                 - log_probs: Log probabilities of sampled actions
         """
+        # logits = logits - logits.max(dim=-1, keepdim=True)[0]  # For numerical stability
         logits = logits / temperature
         probs = F.softmax(logits, dim=-1)
         
@@ -174,6 +176,31 @@ class ActorNetwork(nn.Module):
         """
         logits = self.forward(state)
         return self.sample_action(logits, deterministic, temperature)
+    
+    def get_model_summary(self) -> None:
+        """Print a summary of the network architecture"""
+        total_params = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        
+        print("\nActor Network Architecture:")
+        print("-" * 40)
+        
+        current_dim = None
+        for idx, layer in enumerate(self.model):
+            if isinstance(layer, nn.Linear):
+                current_dim = layer.out_features
+                print(f"Layer {idx}: Linear ({layer.in_features} → {layer.out_features})")
+            elif isinstance(layer, nn.LayerNorm):
+                print(f"Layer {idx}: LayerNorm ({current_dim})")
+            else:
+                print(f"Layer {idx}: {layer.__class__.__name__}")
+                
+        print("-" * 40)
+        print(f"Total Parameters: {total_params:,}")
+        print(f"Trainable Parameters: {trainable_params:,}")
+        print("-" * 40)
+
+
 
 
 class CriticNetwork(nn.Module):
