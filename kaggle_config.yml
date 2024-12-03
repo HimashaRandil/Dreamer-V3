@@ -6,7 +6,7 @@ batch_length : 50
 collect_interval : 100
 num_interaction_episodes : 1
 seed_episodes : 5
-epochs: 300
+epochs: 500
 num_evaluate : 3
 env_name: "l2rpn_case14_sandbox"
 episode_num : 100000
