@@ -12,6 +12,8 @@ env_name: "l2rpn_case14_sandbox"
 episode_num : 100000
 latent_dim : 64
 hidden_dim : 128
+actor_hidden_dims : [384, 768, 1536, 768, 384]
+hidden_layers : 3
 input_dim : 467
 action_dim : 179
 device : 'cuda'
