@@ -11,6 +11,8 @@ import torch.optim as optim
 import grid2op
 from grid2op.Reward import L2RPNSandBoxScore
 from lightsim2grid import LightSimBackend
+from typing import Tuple
+from dreamer.modules.networks import ActorNetwork
 
 
 
@@ -89,6 +91,9 @@ class WorldModel(nn.Module):
             self.continue_predictor.load()
             self.decoder.load()
             print(f"World model loaded at {self.config.saved_model_path}")
+
+
+    
     
 
 
@@ -273,6 +278,9 @@ class Trainer:
     def evaluate_with_grid(self):
         env = grid2op.make(self.config.env_name, reward_class=L2RPNSandBoxScore,
                                 backend=LightSimBackend())
+        
+    
+    
         
         
 
