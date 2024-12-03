@@ -91,3 +91,25 @@ class DreamerTrainer:
         continues = torch.stack(continues)
         
         return states, actions, rewards, continues
+    
+    def train_step(self, initial_state: torch.Tensor) -> Dict[str, float]:
+        """Perform one training step using imagined trajectories."""
+        # Generate imagined trajectory
+        states, actions, rewards, dones = self.imagine_trajectory(initial_state, self.actor_critic.actor, self.config.horizon)
+        
+        # Get values from critic
+        values, _ = self.actor_critic.critic(states, actions)
+        
+        # Compute λ-returns
+        lambda_returns = self.actor_critic.compute_lambda_returns(rewards, values, dones)
+        
+        # Update networks
+        critic_loss = self.actor_critic.update_critic(states, lambda_returns)
+        actor_loss = self.actor_critic.update_actor(states, actions, lambda_returns)
+        
+        return {
+            'actor_loss': actor_loss,
+            'critic_loss': critic_loss,
+            'mean_return': lambda_returns.mean().item(),
+            'return_std': lambda_returns.std().item()
+        }
