@@ -181,25 +181,3 @@ class ActorCritic:
         
         return actor_loss.item()
     
-    
-    def train_step(self, initial_state: torch.Tensor) -> Dict[str, float]:
-        """Perform one training step using imagined trajectories."""
-        # Generate imagined trajectory
-        states, actions, rewards, dones = self.world_model.imagine_trajectory(initial_state, self.actor, self.horizon)
-        
-        # Get values from critic
-        values, _ = self.critic(states, actions)
-        
-        # Compute λ-returns
-        lambda_returns = self.compute_lambda_returns(rewards, values, dones)
-        
-        # Update networks
-        critic_loss = self.update_critic(states, lambda_returns)
-        actor_loss = self.update_actor(states, actions, lambda_returns)
-        
-        return {
-            'actor_loss': actor_loss,
-            'critic_loss': critic_loss,
-            'mean_return': lambda_returns.mean().item(),
-            'return_std': lambda_returns.std().item()
-        }
