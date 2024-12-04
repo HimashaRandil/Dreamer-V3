@@ -32,8 +32,10 @@ class RecurrentModel(nn.Module):
         return h_t 
     
 
-    def input_init(self):
-        return torch.zeros(self.config.batch_size, self.config.hidden_dim).to(self.config.device)
+    def input_init(self, batch_size=None):
+        if batch_size is None:
+            batch_size = self.config.batch_size
+        return torch.zeros(batch_size, self.config.hidden_dim).to(self.config.device)
     
     def action_init(self):
         return torch.zeros(self.config.batch_size, self.config.action_dim).to(self.config.device)
