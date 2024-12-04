@@ -76,7 +76,7 @@ class DreamerTrainer:
                    
         return latent_states, hidden_states, actions, rewards, continues
     
-    def train_step(self, initial_state: torch.Tensor) -> Dict[str, float]:
+    def train_step(self, initial_state: torch.Tensor, replay_buffer_batch: Dict) -> Dict[str, float]:
         """Perform one training step using imagined trajectories."""
         # Generate imagined trajectory
         states, actions, rewards, dones = self.imagine_trajectory(initial_state, self.actor_critic.actor, self.config.horizon)
@@ -87,13 +87,32 @@ class DreamerTrainer:
         # Compute λ-returns
         lambda_returns = self.actor_critic.compute_lambda_returns(rewards, values, dones)
         
-        # Update networks
-        critic_loss = self.actor_critic.update_critic(states, lambda_returns)
+        # Update from imagined trajectory (scale = 1.0)
+        critic_loss_imagine = self.actor_critic.update_critic(states, actions, lambda_returns)
+        
+        # Get replay buffer data
+        replay_states = replay_buffer_batch['states']
+        replay_actions = replay_buffer_batch['actions']
+        replay_rewards = replay_buffer_batch['rewards']
+        replay_continues = replay_buffer_batch['continues']
+        
+        # Compute returns for replay data
+        replay_values, _ = self.actor_critic.critic(replay_states, replay_actions)
+        replay_lambda_returns = self.actor_critic.compute_lambda_returns(
+            replay_rewards, replay_values, replay_continues
+        )
+        
+        # Update from replay data (scale = 0.3)
+        critic_loss_replay = self.actor_critic.update_critic_replay(
+            replay_states, replay_actions, replay_lambda_returns
+        )
+        
+        # Rest of the training step...
         actor_loss = self.actor_critic.update_actor(states, actions, lambda_returns)
         
         return {
             'actor_loss': actor_loss,
-            'critic_loss': critic_loss,
+            'critic_loss_imagine': critic_loss_imagine,
+            'critic_loss_replay': critic_loss_replay,
             'mean_return': lambda_returns.mean().item(),
-            'return_std': lambda_returns.std().item()
         }

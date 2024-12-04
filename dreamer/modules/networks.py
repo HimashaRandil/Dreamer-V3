@@ -95,11 +95,20 @@ class ActorNetwork(nn.Module):
             x: Input tensor (batch_size, in_dim) or (T, B, in_dim)
         Returns:
             logits: Action logits of shape (batch_size, action_dim) or (T, B, action_dim)
+
         """
+
+        assert x.dim() in [2, 3], f"Input must be 2D or 3D tensor, got shape {x.shape}"
+        assert x.size(-1) == self.in_dim, f"Expected input feature size {self.in_dim}, got {x.size(-1)}"
+        
+
         original_shape = x.shape[:-1]  # Store original batch dimensions
         x = x.view(-1, x.size(-1))     # Flatten batch dimensions
         logits = self.model(x)         # (N, action_dim)
-        
+
+        # Verify output dimensions
+        assert logits.size(-1) == self.action_dim, f"Network output dimension mismatch. Expected {self.action_dim}, got {logits.size(-1)}"
+
         # Restore original batch dimensions
         return logits.view(*original_shape, self.action_dim)
     
@@ -118,19 +127,27 @@ class ActorNetwork(nn.Module):
                 - actions: Sampled actions
                 - log_probs: Log probabilities of sampled actions
         """
-        # logits = logits - logits.max(dim=-1, keepdim=True)[0]  # For numerical stability
-        logits = logits / temperature
-        probs = F.softmax(logits, dim=-1)
-        
-        if deterministic:
-            actions = torch.argmax(probs, dim=-1)
-            log_probs = torch.log(torch.gather(probs, -1, actions.unsqueeze(-1))).squeeze(-1)
-        else:
-            dist = torch.distributions.Categorical(probs)
-            actions = dist.sample()
-            log_probs = dist.log_prob(actions)
+
+        assert temperature > 0, f"Temperature must be positive, got {temperature}"
+
+        try: 
+
+            logits = logits / temperature
+            probs = F.softmax(logits, dim=-1)
             
-        return actions, log_probs
+            if deterministic:
+                actions = torch.argmax(probs, dim=-1)
+                log_probs = torch.log(torch.gather(probs, -1, actions.unsqueeze(-1))).squeeze(-1)
+            else:
+                dist = torch.distributions.Categorical(probs)
+                actions = dist.sample()
+                log_probs = dist.log_prob(actions)
+                
+            return actions, log_probs
+        
+        except Exception as e:
+            raise RuntimeError(f"Error sampling action: {str(e)}")
+
 
     def evaluate_actions(self, logits: Tensor, actions: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """
@@ -218,6 +235,8 @@ class CriticNetwork(nn.Module):
 
         super().__init__()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.obs_dim = obs_dim
+        self.action_dim = action_dim
         self.num_buckets = num_buckets
 
         # Feature extraction layers
@@ -298,18 +317,19 @@ class CriticNetwork(nn.Module):
         # action = self._process_action(action)
             
         # Extract features from observation
+
+        assert obs.dim() in [2,3], f"Observation must be 2D or 3D tensor, got shape {obs.shape}"
+        assert action.dim() in [2,3], f"Action must be 2D or 3D tensor, got shape {action.shape}"
+        assert obs.size(-1) == self.obs_dim, f"Expected observation feature size {self.obs_dim}, got {obs.size(-1)}"
+        assert action.size(-1) == self.action_dim, f"Expected action feature size {self.action_dim}, got {action.size(-1)}"
+
+
         features = self.feature_net(obs)
-        
-        # Process action
-        action_features = self.action_net(action)
-        
-        # Combine features
-        combined = torch.cat([features, action_features], dim=-1)
-        combined_features = self.combined_net(combined)
-        
-        # Predict value and risk
-        value_logits = self.value_head(combined_features)
-        risk = self.risk_head(combined_features)
+        action_features = self.action_net(action) # Process action
+        combined = torch.cat([features, action_features], dim=-1)# Combine features
+        combined_features = self.combined_net(combined)# Combine features
+        value_logits = self.value_head(combined_features) # Predict value and risk
+        risk = self.risk_head(combined_features)# Predict value and risk
 
         # Convert value distribution to scalar value
         value_probs = F.softmax(value_logits, dim=-1)
