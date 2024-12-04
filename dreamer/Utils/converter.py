@@ -1,6 +1,7 @@
 import grid2op
 from grid2op import Environment
 import numpy as np
+import torch
 
 class ActionConverter:
     def __init__(self, env:Environment) -> None:
@@ -39,3 +40,23 @@ class ActionConverter:
     
     def action_idx(self, action):
         return self.actions.index(action)
+    
+    def one_hot_encode(tensor, num_classes):
+        """
+        One-hot encode a tensor of indices.
+        
+        Args:
+            tensor (torch.Tensor): Tensor containing class indices (e.g., tensor([104], device='cuda:0')).
+            num_classes (int): Total number of classes.
+            
+        Returns:
+            torch.Tensor: One-hot encoded tensor.
+        """
+        # Ensure tensor is long type for indexing
+        tensor = tensor.long()
+        
+        # Create a one-hot encoded tensor
+        one_hot = torch.zeros(tensor.size(0), num_classes, device=tensor.device)
+        one_hot.scatter_(1, tensor.unsqueeze(1), 1)
+        
+        return one_hot
