@@ -181,3 +181,23 @@ class ActorCritic:
         
         return actor_loss.item()
     
+
+    def one_hot_encode(self, tensor):
+        """
+        One-hot encode a tensor of indices.
+        
+        Args:
+            tensor (torch.Tensor): Tensor containing class indices (e.g., tensor([104], device='cuda:0')).
+            num_classes (int): Total number of classes.
+            
+        Returns:
+            torch.Tensor: One-hot encoded tensor.
+        """
+        # Ensure tensor is long type for indexing
+        tensor = tensor.long()
+        
+        # Create a one-hot encoded tensor
+        one_hot = torch.zeros(tensor.size(0), self.config.action_dim, device=tensor.device)
+        one_hot.scatter_(1, tensor.unsqueeze(1), 1)
+        
+        return one_hot
