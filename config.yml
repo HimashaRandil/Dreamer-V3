@@ -13,6 +13,7 @@ episode_num : 100000
 latent_dim : 64
 hidden_dim : 128
 actor_hidden_dims : [384, 768, 1536, 768, 384]
+critic_hidden_dims : 512
 hidden_layers : 3
 input_dim : 467
 action_dim : 179
@@ -26,6 +27,8 @@ pre_trained_path : "dreamer\\Pre_trained_models\\models"
 horizon :  16 
 gamma : 0.997
 lambda_gae : 0.95
+beta_val : 1.0
+beta_repval : 0.3
 entropy_scale : 0.0003
 critic_ema_decay : 0.995
 num_buckets : 255
