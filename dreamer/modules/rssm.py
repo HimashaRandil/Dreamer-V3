@@ -26,8 +26,11 @@ class RSSM(nn.Module):
         self.d_model = DynamicPredictor(self.config)
         self.e_model = Encoder(self.config)
 
-    def recurrent_model_input_init(self):
-        return self.r_model.input_init(), self.r_model.action_init()
+    def recurrent_model_input_init(self, batch=None):
+        if batch:
+            return self.r_model.input_init(batch), self.r_model.action_init()
+        else:
+            return self.r_model.input_init(), self.r_model.action_init()
 
     
     def forward(self, obs, hidden_state, action):
