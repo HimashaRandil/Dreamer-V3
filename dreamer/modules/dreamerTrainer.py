@@ -5,11 +5,7 @@ import numpy as np
 from typing import Tuple, Dict
 
 from dreamer.modules.worldModel import WorldModel
-
 from dreamer.modules.actor_critic import ActorCritic
-
-
-
 
 class DreamerTrainer:
     def __init__(
@@ -45,8 +41,8 @@ class DreamerTrainer:
         continues = []     # store ct
 
         # Get initial z0 using encoder and initialize h0
-        current_z, _ = self.rssm.e_model(initial_state)  # Initial latent state from encoder
-        current_h, _ = self.rssm.recurrent_model_input_init()  # Initial hidden state
+        current_z, _ = self.world_model.rssm.e_model(initial_state)  # Initial latent state from encoder
+        current_h, _ = self.world_model.rssm.recurrent_model_input_init(batch=1)  # Initial hidden state
 
         
         for t in range(self.config.horizon):
@@ -58,39 +54,27 @@ class DreamerTrainer:
             state_repr = torch.cat([current_z, current_h], dim=-1)
             
             # Get action from actor network
-            action,_ = ActorCritic.actor.sample_action()
+            action,_ = self.actor_critic.actor.act(state=state_repr)
             actions.append(action)
             
             # Use RSSM to predict next states and outcomes
             # Note: Using your RSSM's transition models
-            next_h = self.rssm.r_model(torch.cat([current_z, action], dim=-1), current_h)
-            next_z_prior = self.rssm.d_model(torch.cat([next_h, action], dim=-1))
+            next_h = self.world_model.rssm.r_model(current_z, self.actor_critic.one_hot_encode(action), current_h)
+            _, next_z_prior = self.world_model.rssm.d_model(next_h)
             
             # Predict reward and continue signal using world model components
-            reward = self.reward_predictor(next_z_prior.loc, next_h)  # Using mean of prior
-            cont = self.continue_predictor(next_z_prior.loc, next_h)
+            reward = self.world_model.reward_predictor(next_z_prior, next_h)  # Using mean of prior
+            cont = self.world_model.continue_predictor(next_z_prior, next_h)
             
             rewards.append(reward)
             continues.append(cont)
             
             # Update states for next step
-            current_z = next_z_prior.loc  # Use mean of prior distribution
+            current_z = next_z_prior  # Use mean of prior distribution
             current_h = next_h
             
-            # Optional: Early stopping if continue probability is low
-            if torch.sigmoid(cont).item() < 0.5:
-                break
-        
-        # Stack all tensors
-        states = torch.stack([
-            torch.cat([z, h], dim=-1) 
-            for z, h in zip(latent_states, hidden_states)
-        ])
-        actions = torch.stack(actions)
-        rewards = torch.stack(rewards)
-        continues = torch.stack(continues)
-        
-        return states, actions, rewards, continues
+                   
+        return latent_states, hidden_states, actions, rewards, continues
     
     def train_step(self, initial_state: torch.Tensor) -> Dict[str, float]:
         """Perform one training step using imagined trajectories."""
