@@ -79,13 +79,19 @@ class DreamerTrainer:
     def train_step(self, initial_state: torch.Tensor, replay_buffer_batch: Dict) -> Dict[str, float]:
         """Perform one training step using imagined trajectories."""
         # Generate imagined trajectory
-        states, actions, rewards, dones = self.imagine_trajectory(initial_state, self.actor_critic.actor, self.config.horizon)
+
+        latent_states, hidden_states, actions, rewards, continues =self.imagine_trajectory(initial_state=initial_state)
+
         
-        # Get values from critic
-        values, _ = self.actor_critic.critic(states, actions)
+        values = [] 
+        
+        for time_step in range(len(latent_states)):
+            states = torch.cat([latent_states[time_step], hidden_states[time_step]], dim=-1)
+            value,_ = self.actor_critic.critic(states,actions[time_step])
+            values.append(value)
         
         # Compute λ-returns
-        lambda_returns = self.actor_critic.compute_lambda_returns(rewards, values, dones)
+        lambda_returns = self.actor_critic.compute_lambda_returns(rewards, values, continues)
         
         # Update from imagined trajectory (scale = 1.0)
         critic_loss_imagine = self.actor_critic.update_critic(states, actions, lambda_returns)
