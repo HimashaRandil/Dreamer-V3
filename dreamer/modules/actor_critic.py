@@ -15,21 +15,11 @@ from dreamer.modules.networks import ActorNetwork, CriticNetwork
 class ActorCritic:
     def __init__(
         self,
-        # world_model: WorldModel,
-        # actor: ActorNetwork,
-        # critic: CriticNetwork,
-        # critic: nn.Module,
         config,
         device: str = "cuda"
     ):
         self.config =  config 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # self.world_model = world_model
-        # self.actor = actor
-        # self.critic = critic
-        
-        # Initialize critic target network (EMA)
-        # self.critic_target = type(critic)(*critic.__init_args__).to(device)
 
         self.actor = ActorNetwork(
             in_dim=self.config.latent_dim + self.config.hidden_dim,
@@ -66,7 +56,9 @@ class ActorCritic:
         
         # Setup value discretization
         self.num_buckets = self.config.num_buckets
-        self.bucket_values = torch.linspace(-20, 20, self.config.num_buckets).to(device)
+        # self.bucket_values = torch.linspace(-20, 20, self.num_buckets).to(device) 
+        # Exponentially SPaced Bins used in Dreamer-V3 version 2
+        self.bucket_values = torch.sign(torch.linspace(-20, 20, self.num_buckets)) * (torch.exp(torch.abs(torch.linspace(-20, 20, self.num_buckets))) - 1)
         
         # Optimizers
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.actor_critic_lr)
@@ -103,38 +95,84 @@ class ActorCritic:
         self, 
         rewards: torch.Tensor,
         values: torch.Tensor,
-        dones: torch.Tensor
+        continues: torch.Tensor
     ) -> torch.Tensor:
-        """Compute λ-returns as described in the paper."""
+        """
+        Compute λ-returns as described in the paper.
+        R^λ_t = rt + γct[(1-λ)vt + λR^λ_{t+1}]
+        """
         lambda_returns = torch.zeros_like(rewards)
         next_value = values[-1]
         
         for t in reversed(range(self.horizon)):
             bootstrap = (1 - self.lambda_gae) * values[t + 1] + self.lambda_gae * next_value
-            lambda_returns[t] = rewards[t] + self.gamma * (1 - dones[t]) * bootstrap
+            lambda_returns[t] = rewards[t] + self.gamma * (continues[t]) * bootstrap
             next_value = lambda_returns[t]
             
         return lambda_returns
     
-    def update_critic(self, states: torch.Tensor, lambda_returns: torch.Tensor) -> float:
+    def update_critic(self, states: torch.Tensor, actions: torch.Tensor, lambda_returns: torch.Tensor) -> float:
         """Update critic using discrete regression with twohot targets."""
         # Transform and encode targets
         transformed_returns = self.symlog(lambda_returns)
         target_distribution = self.twohot_encode(transformed_returns)
         
         # Get critic predictions
-        value_logits = self.critic.get_value_distribution(states)  # Need to modify critic
+        value_logits = self.critic.get_value_distribution(states, actions)  # Need to modify critic
         value_distribution = F.softmax(value_logits, dim=-1)
         
         # Compute loss (categorical cross-entropy)
         critic_loss = -(target_distribution * torch.log(value_distribution + 1e-8)).sum(-1).mean()
         
-        # Update critic
+        # Update critic with full scale (beta_val = 1.0)
+        loss = critic_loss * self.beta_val
+        
         self.critic_optimizer.zero_grad()
-        critic_loss.backward()
+        loss.backward()
+        self.critic_optimizer.step()
+
+        # Update target network
+        self._update_target_network()
+        
+        return critic_loss.item()
+    
+    def update_critic_replay(self, states: torch.Tensor, actions: torch.Tensor, lambda_returns: torch.Tensor) -> float:
+        """
+        Update critic using replay buffer trajectories (scale = 0.3)
+        
+        This is important because:
+        1. Helps ground predictions in real experiences
+        2. Prevents divergence from actual environment dynamics
+        3. Balances between imagination and reality
+        
+        Args:
+            states: Real states from replay buffer
+            actions: Real actions from replay buffer
+            lambda_returns: Computed returns from real trajectories
+        """
+        transformed_returns = self.symlog(lambda_returns)
+        target_distribution = self.twohot_encode(transformed_returns)
+        
+        value_logits = self.critic.get_value_distribution(states, actions)
+        value_distribution = F.softmax(value_logits, dim=-1)
+        
+        critic_loss = -(target_distribution * torch.log(value_distribution + 1e-8)).sum(-1).mean()
+        
+        # Update critic with reduced scale (beta_repval = 0.3)
+        loss = critic_loss * self.beta_repval
+        
+        self.critic_optimizer.zero_grad()
+        loss.backward()
         self.critic_optimizer.step()
         
-        # Update target network (EMA)
+        # Update target network
+        self._update_target_network()
+        
+        return loss.item()
+    
+
+    def _update_target_network(self):
+        """Helper method for target network updates"""
         with torch.no_grad():
             for param, target_param in zip(self.critic.parameters(), 
                                          self.critic_target.parameters()):
@@ -142,8 +180,7 @@ class ActorCritic:
                     self.critic_ema_decay * target_param.data + 
                     (1 - self.critic_ema_decay) * param.data
                 )
-        
-        return critic_loss.item()
+    
     
     def update_actor(
         self,
