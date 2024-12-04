@@ -33,26 +33,27 @@ class ActorCritic:
         self.critic = CriticNetwork(
             obs_dim=config.latent_dim + config.hidden_dim,
             action_dim=self.config.action_dim,
-            hidden_dim=400,
+            hidden_dim=self.config.critic_hidden_dims,
             num_buckets=self.config.num_buckets
         ).to(device)
 
         self.critic_target= CriticNetwork(
             obs_dim=config.latent_dim + config.hidden_dim,
             action_dim=self.config.action_dim,
-            hidden_dim=400,
+            hidden_dim=self.config.critic_hidden_dims,
             num_buckets=self.config.num_buckets
         ).to(device)
 
         self.critic_target.load_state_dict(self.critic.state_dict())
-        
+
+        self.beta_val = self.config.beta_val
+        self.beta_repval = self.config.beta_repval
 
         self.horizon = self.config.horizon
         self.gamma = self.config.gamma
         self.lambda_gae = self.config.lambda_gae
         self.entropy_scale = self.config.entropy_scale
         self.critic_ema_decay = self.config.critic_ema_decay
-        self.device = device
         
         # Setup value discretization
         self.num_buckets = self.config.num_buckets
@@ -102,12 +103,12 @@ class ActorCritic:
         R^λ_t = rt + γct[(1-λ)vt + λR^λ_{t+1}]
         """
         lambda_returns = torch.zeros_like(rewards)
-        next_value = values[-1]
+        # Handle the final step: R^λ_T = vT
+        lambda_returns[-1] = values[-1]
         
-        for t in reversed(range(self.horizon)):
-            bootstrap = (1 - self.lambda_gae) * values[t + 1] + self.lambda_gae * next_value
-            lambda_returns[t] = rewards[t] + self.gamma * (continues[t]) * bootstrap
-            next_value = lambda_returns[t]
+        for t in reversed(range(len(values)- 1)):
+            bootstrap = (1 - self.lambda_gae) * values[t] + self.lambda_gae * lambda_returns[t + 1]
+            lambda_returns[t] = rewards[t] + self.gamma * continues[t] * bootstrap
             
         return lambda_returns
     

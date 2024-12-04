@@ -338,12 +338,22 @@ class CriticNetwork(nn.Module):
         
         return value, risk
     
-    def get_value_distribution(self, states, actions):
-        features = self.feature_net(states)
-        action_features = self.action_net(actions)
-        combined = torch.cat([features, action_features], dim=-1)
-        combined_features = self.combined_net(combined)
-        return self.value_head(combined_features)
+    def get_value_distribution(self, obs, action):
+        assert obs.dim() in [2,3], f"Observation must be 2D or 3D tensor, got shape {obs.shape}"
+        assert action.dim() in [2,3], f"Action must be 2D or 3D tensor, got shape {action.shape}"
+        assert obs.size(-1) == self.obs_dim, f"Expected observation feature size {self.obs_dim}, got {obs.size(-1)}"
+        assert action.size(-1) == self.action_dim, f"Expected action feature size {self.action_dim}, got {action.size(-1)}"
+
+
+        features = self.feature_net(obs)
+        action_features = self.action_net(action) # Process action
+        combined = torch.cat([features, action_features], dim=-1)# Combine features
+        combined_features = self.combined_net(combined)# Combine features
+        value_logits = self.value_head(combined_features)
+
+        return value_logits 
+
+    
 
     def predict_value(self, obs, action):
         """
