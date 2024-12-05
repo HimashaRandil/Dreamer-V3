@@ -104,7 +104,7 @@ class Trainer:
 
         self.optimizer = self.model.optimizer
         self.warmup_epochs = 100
-        self.max_kl_weight = self.config.kl_weight
+        self.max_kl_weight = float(self.config.kl_weight)
 
     def get_kl_weight(self, epoch):
         # Linear warmup
