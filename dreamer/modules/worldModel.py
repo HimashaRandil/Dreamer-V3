@@ -169,17 +169,17 @@ class Trainer:
                 #print(f"Continue : {continue_loss}")
                 #print(f"kl weight : {self.config.kl_weight}")
                 # Total Loss
-                total_loss = recon_loss + reward_loss + continue_loss + float(self.config.kl_weight) * dynamic_loss + float(self.config.kl_weight) * rep_loss
+                batch_total_loss = recon_loss + reward_loss + continue_loss + float(self.config.kl_weight) * dynamic_loss + float(self.config.kl_weight) * rep_loss
                 
                 total_recon_loss += recon_loss.item()
                 total_reward_loss += reward_loss.item()
                 total_continue_loss += continue_loss.item()
                 total_dynamic_loss += dynamic_loss.item()
                 total_rep_loss += rep_loss.item()
-                total_loss += total_loss.item()
+                total_loss += batch_total_loss.item()  # Add the batch total, not total_loss
 
                 self.optimizer.zero_grad()
-                total_loss.backward()
+                batch_total_loss.backward()
                 self.optimizer.step()
 
             # Calculate average losses for the epoch
