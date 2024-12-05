@@ -20,7 +20,7 @@ action_dim : 179
 device : 'cuda'
 learning_rate : 1e-4
 free_bits_threshold : 1e-6
-kl_weight : 1e-2
+kl_weight : 1e-4
 path : "dreamer\\models"
 saved_model_path : "dreamer\\models"
 pre_trained_path : "dreamer\\Pre_trained_models\\models"
