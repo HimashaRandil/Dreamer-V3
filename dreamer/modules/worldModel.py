@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import random
+import numpy as np
 from dreamer.modules.rssm import RSSM
 from dreamer.modules.decoder import Decoder
 from dreamer.modules.rewardModel import RewardPredictor
@@ -123,9 +124,18 @@ class Trainer:
 
             kl_weight = self.get_kl_weight(i)
 
-            for loop_count, (obs, rewards, actions, dones, next_obs) in enumerate(data_loader, start=1):  
+            for loop_count, (obs, rewards, actions, dones, next_obs) in enumerate(data_loader, start=1): 
+
                 obs, rewards, actions, dones, next_obs = obs.to(self.model.device), rewards.to(self.model.device), actions.to(self.model.device), dones.unsqueeze(1).to(self.model.device), next_obs.to(self.model.device)
-            
+
+                num_true = dones.sum().item()
+                num_false = dones.numel() - num_true
+                total = num_true + num_false
+                weight_true = total / (2 * num_true) if num_true > 0 else 1.0
+                weight_false = total / (2 * num_false) if num_false > 0 else 1.0
+
+                # Create weights tensor for the batch
+                batch_weights = dones.float() * weight_true + (1 - dones.float()) * weight_false
 
                 hidden_state, _ = self.model.rssm.recurrent_model_input_init()
                 
@@ -149,7 +159,8 @@ class Trainer:
 
                 # Continue Predictor Loss (Binary Cross-Entropy)
                 continue_pred = outputs['continue_prob']
-                continue_loss = F.binary_cross_entropy_with_logits(dones, continue_pred)
+                continue_loss = F.binary_cross_entropy_with_logits(
+                            continue_pred, dones, weight=batch_weights)
 
                 # KL Divergence Loss
                 posterior_dist = outputs['posterior_dist']
