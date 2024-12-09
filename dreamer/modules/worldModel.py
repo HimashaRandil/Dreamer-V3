@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import random
+import numpy as np
 from dreamer.modules.rssm import RSSM
 from dreamer.modules.decoder import Decoder
 from dreamer.modules.rewardModel import RewardPredictor
@@ -103,7 +104,12 @@ class Trainer:
         self.model = model
 
         self.optimizer = self.model.optimizer
+        self.warmup_epochs = 100
+        self.max_kl_weight = float(self.config.kl_weight)
 
+    def get_kl_weight(self, epoch):
+        # Linear warmup
+        return min(self.max_kl_weight * (epoch / self.warmup_epochs), self.max_kl_weight)
     
     def train(self, data_loader):
         best_loss = float('inf')
@@ -116,9 +122,20 @@ class Trainer:
             total_loss = 0.0
             loop_count = 0
 
-            for loop_count, (obs, rewards, actions, dones, next_obs) in enumerate(data_loader, start=1):  
+            kl_weight = self.get_kl_weight(i)
+
+            for loop_count, (obs, rewards, actions, dones, next_obs) in enumerate(data_loader, start=1): 
+
                 obs, rewards, actions, dones, next_obs = obs.to(self.model.device), rewards.to(self.model.device), actions.to(self.model.device), dones.unsqueeze(1).to(self.model.device), next_obs.to(self.model.device)
-            
+
+                num_true = dones.sum().item()
+                num_false = dones.numel() - num_true
+                total = num_true + num_false
+                weight_true = total / (2 * num_true) if num_true > 0 else 1.0
+                weight_false = total / (2 * num_false) if num_false > 0 else 1.0
+
+                # Create weights tensor for the batch
+                batch_weights = dones.float() * weight_true + (1 - dones.float()) * weight_false
 
                 hidden_state, _ = self.model.rssm.recurrent_model_input_init()
                 
@@ -142,7 +159,8 @@ class Trainer:
 
                 # Continue Predictor Loss (Binary Cross-Entropy)
                 continue_pred = outputs['continue_prob']
-                continue_loss = F.binary_cross_entropy_with_logits(dones, continue_pred)
+                continue_loss = F.binary_cross_entropy_with_logits(
+                            continue_pred, dones, weight=batch_weights)
 
                 # KL Divergence Loss
                 posterior_dist = outputs['posterior_dist']
@@ -153,13 +171,15 @@ class Trainer:
                 posterior_dist.scale.detach()  # Detach the standard deviation
                 )
 
+                dynamic_loss = torch.distributions.kl_divergence(posterior_dist_stopped, prior_dist).sum(dim=-1).mean()
+                dynamic_loss = torch.clamp(dynamic_loss, min=float(self.config.free_bits_threshold))
+
                 prior_dist_stopped = torch.distributions.Normal(
                     prior_dist.loc.detach(),  # Detach the mean
                     prior_dist.scale.detach()  # Detach the standard deviation
                 )
 
-                dynamic_loss = torch.distributions.kl_divergence(posterior_dist_stopped, prior_dist).sum(dim=-1).mean()
-                dynamic_loss = torch.clamp(dynamic_loss, min=float(self.config.free_bits_threshold))
+                
 
                 rep_loss = torch.distributions.kl_divergence(posterior_dist, prior_dist_stopped).sum(dim=-1).mean()
                 rep_loss = torch.clamp(rep_loss, min=float(self.config.free_bits_threshold))
@@ -169,17 +189,17 @@ class Trainer:
                 #print(f"Continue : {continue_loss}")
                 #print(f"kl weight : {self.config.kl_weight}")
                 # Total Loss
-                total_loss = recon_loss + reward_loss + continue_loss + float(self.config.kl_weight) * dynamic_loss + float(self.config.kl_weight) * rep_loss
+                batch_total_loss = recon_loss + reward_loss + continue_loss + kl_weight * dynamic_loss + kl_weight * rep_loss
                 
                 total_recon_loss += recon_loss.item()
                 total_reward_loss += reward_loss.item()
                 total_continue_loss += continue_loss.item()
                 total_dynamic_loss += dynamic_loss.item()
                 total_rep_loss += rep_loss.item()
-                total_loss += total_loss.item()
+                total_loss += batch_total_loss.item()  # Add the batch total, not total_loss
 
                 self.optimizer.zero_grad()
-                total_loss.backward()
+                batch_total_loss.backward()
                 self.optimizer.step()
 
             # Calculate average losses for the epoch
