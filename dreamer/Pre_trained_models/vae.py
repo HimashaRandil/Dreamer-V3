@@ -12,37 +12,34 @@ class Encoder(nn.Module):
         input_size = self.config.input_dim
         hidden_dim = self.config.hidden_dim
         input_dim = input_size + hidden_dim
-        latent_dim = self.config.latent_dim
-
-        self.encoder = nn.Sequential(
-            nn.Linear(input_dim, input_dim // 2),
-            nn.ReLU(),
-            nn.Linear(input_dim // 2, input_dim // 4),
-            nn.ReLU(),
-            nn.Linear(input_dim // 4, input_dim // 8),
-            nn.ReLU()
-        )
-
         self.device = device
 
-        self.mu = nn.Linear(input_dim // 8, latent_dim)
-        self.logvar = nn.Linear(input_dim // 8, latent_dim)
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, input_dim//2),
+            nn.ReLU(),
+            nn.Linear(input_dim//2, input_dim//4),
+            nn.ReLU(),
+            nn.Linear(input_dim//4, input_dim//8),
+            nn.ReLU(),
+            nn.Linear(input_dim//8, self.config.latent_dim*2)
+        )
 
         if kwargs.get('path'):
-            self.config.pre_trained_path = kwargs.get('path')
+            self.config.path = kwargs.get('path')
 
-    def forward(self, x):
-        h = torch.zeros(self.config.batch_size, self.config.hidden_dim, device=self.device)
-        x = torch.cat([x, h], dim=-1)
+    def forward(self, x, h):
+        # Get encoder output
+        #h = torch.randn(self.config.batch_size, self.config.hidden_dim, device=self.device)
+        x = torch.cat([h, x], dim=-1)
+        latent_params = self.encoder(x)
 
-        e_x = self.encoder(x)
-        mu = self.mu(e_x)
-        logvar = self.logvar(e_x)
+        mean, log_var = torch.chunk(latent_params, 2, dim=-1)
 
-        std = torch.exp(0.5*logvar)
-        eps = torch.randn_like(std)
+        log_var = torch.clamp(log_var, min=-10, max=10) # for avoid nan value return and numerical stability
+        std = torch.exp(0.5 * log_var)
+        dist = torch.distributions.Normal(mean, std)
 
-        return std * eps + mu, logvar, mu
+        return dist.rsample(), dist
     
 
     def save(self, model_name="pre_trained_encoder"):
@@ -65,6 +62,7 @@ class Decoder(nn.Module):
         latent_dim = self.config.latent_dim
         hidden_dim = self.config.hidden_dim
         input_dim = latent_dim + hidden_dim
+        self.device = device
 
         self.decoder = nn.Sequential(
             nn.Linear(input_dim, input_dim*2),
@@ -73,15 +71,13 @@ class Decoder(nn.Module):
         )
 
         if kwargs.get('path'):
-            self.config.pre_trained_path = kwargs.get('path')
+            self.config.path = kwargs.get('path')
 
-        self.device = device
 
-    def forward(self, z):
-        h = torch.randn(self.config.batch_size, self.config.hidden_dim, device=self.device)
+    def forward(self, z, h):
         x = torch.cat((z, h), dim=-1)
         actual = self.decoder(x)
-        return torch.sigmoid(actual)
+        return actual
     
      
     def save(self, model_name="pre_trained_decoder"):
@@ -96,24 +92,25 @@ class Decoder(nn.Module):
 
 
 class VAE(nn.Module):
-    def __init__(self, config, device, **kwargs):
+    def __init__(self, config, device):
         super(VAE, self).__init__()
+        self.config = config
         self.device = device
         self.encoder = Encoder(config, device=self.device)
         self.decoder = Decoder(config, device=self.device)
-        self.config = config
-
-        if kwargs.get('path'):
-            self.config.pre_trained_path = kwargs.get('path')
+        
 
     def forward(self, x):
-        # Pass through encoder to get latent representation
-        z, logvar, mu = self.encoder(x)
+        h = torch.zeros(self.config.batch_size, self.config.hidden_dim).to(self.device) 
+
+        z, dist = self.encoder(x, h)
+        mean = dist.mean
+        log_var = dist.scale.log() ** 2  
         
-        # Reconstruct through decoder
-        reconstructed = self.decoder(z)
-        
-        return reconstructed, logvar, mu
+        reconstructed = self.decoder(z, h)
+
+        return reconstructed, mean, log_var
+
 
     def save(self, model_name="vae"):
         os.makedirs(self.config.pre_trained_path, exist_ok=True)
@@ -127,19 +124,38 @@ class VAE(nn.Module):
         self.decoder.load()
 
 
+    def kl_divergence_loss(self, mean, log_var):
+        """
+        Compute the KL Divergence Loss.
+        :param mean: Mean (\mu) of the latent distribution.
+        :param log_var: Log variance (\log \sigma^2) of the latent distribution.
+        :return: KL Divergence loss (scalar).
+        """
+        kl_loss = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp(), dim=-1)
+        return kl_loss.mean()
+    
+    def reconstruction_loss(self, reconstructed, original):
+        return nn.MSELoss()(reconstructed, original)
+    
+
+    def vae_loss_function(self, reconstructed, original, mean, log_var):
+        """
+        Compute the total VAE loss: Reconstruction Loss + KL Divergence Loss.
+        """
+        # Compute individual losses
+        rec_loss = self.reconstruction_loss(reconstructed, original)
+        kl_loss = self.kl_divergence_loss(mean, log_var)
+        
+        # Total loss
+        return rec_loss + kl_loss
 
 
-def vae_loss_function(reconstructed, original, logvar, mu):
-    """Calculate VAE loss: Reconstruction Loss + KL Divergence."""
-    reconstruction_loss = nn.MSELoss()(reconstructed, original)  # L2 loss
-    # KL Divergence: Measure divergence between approximate posterior and prior.
-    kl_divergence = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1).mean()
-    return reconstruction_loss + kl_divergence
 
 
 
 
-def train_vae(vae, data_loader, epochs, lr=1e-3, device='cuda'):
+
+def train_vae(vae:VAE, data_loader, epochs, lr=1e-3, device='cuda'):
     optimizer = optim.Adam(vae.parameters(), lr=lr)
     vae.to(device)
 
@@ -153,10 +169,10 @@ def train_vae(vae, data_loader, epochs, lr=1e-3, device='cuda'):
             # Assume batch is a tuple (input_data, auxiliary_hidden_state)
 
             # Forward pass
-            reconstructed, logvar, mu = vae(obs)
+            reconstructed, mean, log_var = vae(obs)
 
             # Compute loss
-            loss = vae_loss_function(reconstructed, obs, logvar, mu)
+            loss = vae.vae_loss_function(reconstructed, obs, mean, log_var)
             total_loss += loss.item()
 
             # Backward pass
