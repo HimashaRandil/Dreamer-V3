@@ -200,6 +200,19 @@ class DataGeneration:
             obs_data, action_data, obs_next_data, reward_data, done_data, steps = [], [], [], [], [], []
 
 
+    def load_trajectory(file_path):
+        """
+        Load a trajectory data file.
+
+        Args:
+            file_path (str): Path to the saved trajectory file.
+
+        Returns:
+            dict: Loaded trajectory data.
+        """
+        with open(file_path, 'rb') as f:
+            return dill.load(f)
+    
 
     def save_trajectories(self, data, folder_name, episode_id):
         """
