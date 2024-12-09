@@ -67,6 +67,7 @@ class ActorNetwork(nn.Module):
 
         super().__init__()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.in_dim = in_dim 
         self.action_dim = action_dim
         norm = nn.LayerNorm if layer_norm else NoNorm
 
@@ -291,13 +292,6 @@ class CriticNetwork(nn.Module):
         nn.init.zeros_(self.risk_head[-1].weight)
 
 
-    def _process_action(self, action: torch.Tensor) -> torch.Tensor:
-        """Process action input to correct format."""
-        if action.dim() == 1:
-            # Convert discrete action to one-hot
-            return F.one_hot(action, num_classes=self.action_dim).float()
-        return action
-
 
     def forward(self, obs, action):
         """
@@ -314,7 +308,6 @@ class CriticNetwork(nn.Module):
         """
 
         # Process action to one-hot if needed
-        # action = self._process_action(action)
             
         # Extract features from observation
 
@@ -333,7 +326,8 @@ class CriticNetwork(nn.Module):
 
         # Convert value distribution to scalar value
         value_probs = F.softmax(value_logits, dim=-1)
-        bucket_values = torch.linspace(-20, 20, self.num_buckets, device=obs.device)
+        linspace = torch.linspace(-20, 20, self.num_buckets, device=obs.device)
+        bucket_values = torch.sign(linspace) * (torch.exp(torch.abs(linspace)) - 1)
         value = (value_probs * bucket_values).sum(dim=-1, keepdim=True)
         
         return value, risk
