@@ -71,11 +71,15 @@ class ActorCritic:
         
     def symlog(self, x):
         """Symmetric log transformation."""
-        return torch.sign(x) * torch.log(1 + torch.abs(x))
+        # Clip input to prevent infinite values
+        x = torch.clamp(x, -1e6, 1e6)
+        return torch.sign(x) * torch.log(1 + torch.clamp(torch.abs(x), min=1e-6))
     
     def symexp(self, x):
         """Inverse of symlog."""
-        return torch.sign(x) * (torch.exp(torch.abs(x)) - 1)
+        # Clip input to prevent infinite values
+        x = torch.clamp(x, -1e6, 1e6)
+        return torch.sign(x) * (torch.exp(torch.clamp(torch.abs(x), max=15)) - 1)
     
     def twohot_encode(self, x):
         """Compute twohot encoding."""
@@ -102,6 +106,10 @@ class ActorCritic:
         Compute λ-returns as described in the paper.
         R^λ_t = rt + γct[(1-λ)vt + λR^λ_{t+1}]
         """
+        if not (rewards.shape == values.shape == continues.shape):
+            raise ValueError(f"Shape mismatch: rewards {rewards.shape}, values {values.shape}, "
+                           f"continues {continues.shape}")
+        
         lambda_returns = torch.zeros_like(rewards)
         # Handle the final step: R^λ_T = vT
         lambda_returns[-1] = values[-1]
@@ -193,10 +201,10 @@ class ActorCritic:
         # Normalize returns
         if self.return_ema is None:
             self.return_ema = lambda_returns.mean()
-            self.return_std = lambda_returns.std()
+            self.return_std = max(lambda_returns.std(), 1e-6)
         else:
             self.return_ema = 0.99 * self.return_ema + 0.01 * lambda_returns.mean()
-            self.return_std = 0.99 * self.return_std + 0.01 * lambda_returns.std()
+            self.return_std = max(0.99 * self.return_std + 0.01 * lambda_returns.std(), 1e-6)
         
         normalized_returns = lambda_returns / torch.max(
             torch.ones_like(lambda_returns),
@@ -222,20 +230,32 @@ class ActorCritic:
 
     def one_hot_encode(self, tensor):
         """
-        One-hot encode a tensor of indices.
+        One-hot encode a tensor of action indices.
         
         Args:
-            tensor (torch.Tensor): Tensor containing class indices (e.g., tensor([104], device='cuda:0')).
-            num_classes (int): Total number of classes.
-            
+            tensor (torch.Tensor): Action indices tensor. Can be:
+                - 0D: single action (scalar)
+                - 1D: [batch_size] multiple actions
+                - 2D: [batch_size, 1] multiple actions
+                
         Returns:
-            torch.Tensor: One-hot encoded tensor.
+            torch.Tensor: One-hot encoded tensor of shape [batch_size, action_dim]
         """
-        # Ensure tensor is long type for indexing
+        # Convert to long dtype for indexing
         tensor = tensor.long()
         
-        # Create a one-hot encoded tensor
-        one_hot = torch.zeros(tensor.size(0), self.config.action_dim, device=tensor.device)
+        # Handle different input dimensions
+        if tensor.dim() == 0:  # Single action (scalar)
+            tensor = tensor.unsqueeze(0)  # Add batch dimension [1]
+        elif tensor.dim() == 2:  # Already has second dimension [batch_size, 1]
+            tensor = tensor.squeeze(-1)  # Remove second dimension
+        # tensor.dim() == 1 case doesn't need modification
+        
+        # Create zero tensor with proper batch size
+        batch_size = tensor.size(0)
+        one_hot = torch.zeros(batch_size, self.config.action_dim, device=tensor.device)
+        
+        # Perform one-hot encoding
         one_hot.scatter_(1, tensor.unsqueeze(1), 1)
         
         return one_hot
