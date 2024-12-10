@@ -59,14 +59,14 @@ class WorldModel(nn.Module):
         z_prior, z_posterior, h, dist, dynamic_dist = self.rssm(obs, hidden_state, action)   #Dynamics Predictor: Provides the prior distribution
 
         reconstructed_obs = self.decoder(z_posterior, hidden_state)
-        reward = self.reward_predictor(z_posterior, hidden_state)
+        reward_dist = self.reward_predictor(z_posterior, hidden_state)
         continue_prob = self.continue_predictor(z_posterior, hidden_state)
 
         return {
             'prior_dist': dynamic_dist,
             'posterior_dist': dist,
             'reconstructed_obs': reconstructed_obs,
-            'reward': reward.rsample(),
+            'reward_dist': reward_dist,
             'continue_prob': continue_prob,
             'hidden_state': h
         }
@@ -154,8 +154,12 @@ class Trainer:
                 recon_loss = F.mse_loss(reconstructed_obs, obs)
 
                 # Reward Predictor Loss
-                reward_pred = outputs['reward']
-                reward_loss = F.mse_loss(reward_pred, rewards)
+                reward_pred = outputs['reward_dist']
+                std_target = 0.1  # Fixed standard deviation for target rewards
+                target_dist = torch.distributions.Normal(rewards, std_target)
+                reward_loss = torch.distributions.kl_divergence(reward_pred, target_dist).mean()
+
+                #reward_loss = F.mse_loss(reward_pred, rewards)
 
                 # Continue Predictor Loss (Binary Cross-Entropy)
                 continue_pred = outputs['continue_prob']
