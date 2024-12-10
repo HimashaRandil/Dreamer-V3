@@ -202,27 +202,32 @@ class DataGeneration:
 
 
     
-    def save_trajectory(self, trajectory_data, folder_name, episode_id):
+    def save_trajectories(data, folder_name, episode_id):
         """
-        Save trajectory data for a single episode using cloudpickle.
+        Save the trajectory data for a specific episode using dill.
 
         Args:
-            trajectory_data (dict): Trajectory data to save.
-            folder_name (str): Folder where to save the data.
-            episode_id (int): ID of the episode.
+            data (dict): A dictionary containing trajectory data (obs_data, action_data, etc.).
+            folder_name (str): Directory where the data will be saved.
+            episode_id (int): Episode ID to differentiate saved files.
         """
-        os.makedirs(folder_name, exist_ok=True)
+        if not os.path.exists(folder_name):
+            os.makedirs(folder_name)
+
         file_path = os.path.join(folder_name, f"episode_{episode_id}.pkl")
+        
         with open(file_path, 'wb') as f:
-            cloudpickle.dump(trajectory_data, f)
-        print(f"Saved trajectory for episode {episode_id} at {file_path}")
+            dill.dump(data, f)
+        
+        print(f"Saved trajectories for episode {episode_id} at {file_path}")
 
 
 
 
-    def load_trajectory(self, file_path):
+
+    def load_trajectory(file_path):
         """
-        Load trajectory data from a file using cloudpickle.
+        Load a trajectory data file.
 
         Args:
             file_path (str): Path to the saved trajectory file.
@@ -231,9 +236,7 @@ class DataGeneration:
             dict: Loaded trajectory data.
         """
         with open(file_path, 'rb') as f:
-            trajectory_data = cloudpickle.load(f)
-        print(f"Loaded trajectory from {file_path}")
-        return trajectory_data
+            return dill.load(f)
 
 
 
@@ -305,7 +308,7 @@ class DataGeneration:
                 "steps": steps
             }
             
-            self.save_trajectory(trajectory_data, folder_name, episode_id)
+            self.save_trajectories(trajectory_data, folder_name, episode_id)
  
 
 
