@@ -157,7 +157,8 @@ class Trainer:
                 reward_pred = outputs['reward_dist']
                 std_target = 0.1  # Fixed standard deviation for target rewards
                 target_dist = torch.distributions.Normal(rewards, std_target)
-                reward_loss = torch.distributions.kl_divergence(reward_pred, target_dist).mean()
+                reward_loss = torch.distributions.kl_divergence(reward_pred, target_dist).sum(dim=-1).mean()
+                reward_loss = torch.clamp(reward_loss, min=float(self.config.free_bits_threshold))
 
                 #reward_loss = F.mse_loss(reward_pred, rewards)
 
