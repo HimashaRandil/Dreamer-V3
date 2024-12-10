@@ -202,7 +202,7 @@ class DataGeneration:
 
 
     
-    def save_trajectories(data, folder_name, episode_id):
+    def save_trajectories(self, data, folder_name, episode_id):
         """
         Save the trajectory data for a specific episode using dill.
 
@@ -225,7 +225,7 @@ class DataGeneration:
 
 
 
-    def load_trajectory(file_path):
+    def load_trajectory(self, file_path):
         """
         Load a trajectory data file.
 
