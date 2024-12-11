@@ -18,6 +18,10 @@ class RewardPredictor(nn.Module):
         self.network = nn.Sequential(
             nn.Linear(self.config.latent_dim + self.config.hidden_dim, 64),
             nn.ReLU(),
+            nn.Linear(64, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
             nn.Linear(64, 32),
             nn.ReLU(),
             nn.Linear(32, 16),
@@ -33,13 +37,11 @@ class RewardPredictor(nn.Module):
         x = self.network(x)
         
         # Split the output into mean and log-variance
-        mean, log_std = x.chunk(2, dim=-1)
+        mean, log_var = x.chunk(2, dim=-1)
         
-        # Use softplus to ensure positive std deviation
-        std = F.softplus(log_std) + 1e-6  # Add small epsilon for numerical stability
-        
-        # Create the Normal distribution for stochastic output
-        dist = Normal(mean, std)
+        log_var = torch.clamp(log_var, min=-10, max=10) # for avoid nan value return and numerical stability
+        std = torch.exp(0.5 * log_var)
+        dist = torch.distributions.Normal(mean, std)
         
         return dist
     

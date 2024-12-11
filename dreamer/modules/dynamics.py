@@ -14,6 +14,12 @@ class DynamicPredictor(nn.Module):
         h = self.config.hidden_dim
 
         self.network = nn.Sequential(
+            nn.Linear(h, h * 2),
+            nn.ReLU(),
+            nn.Linear(h * 2, h * 2),
+            nn.ReLU(),
+            nn.Linear(h * 2, h),
+            nn.ReLU(),
             nn.Linear(h, h // 2),
             nn.ReLU(),
             nn.Linear(h // 2, self.config.latent_dim * 2)  # Output mean and log-variance

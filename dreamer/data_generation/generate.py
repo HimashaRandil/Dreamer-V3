@@ -17,6 +17,7 @@ from grid2op.Exceptions import NoForecastAvailable
 from collections import defaultdict
 from dreamer.Utils.logger import logging
 import warnings
+import cloudpickle
 warnings.filterwarnings('ignore')
 
 
@@ -200,7 +201,7 @@ class DataGeneration:
             obs_data, action_data, obs_next_data, reward_data, done_data, steps = [], [], [], [], [], []
 
 
-
+    
     def save_trajectories(self, data, folder_name, episode_id):
         """
         Save the trajectory data for a specific episode using dill.
@@ -219,6 +220,24 @@ class DataGeneration:
             dill.dump(data, f)
         
         print(f"Saved trajectories for episode {episode_id} at {file_path}")
+
+
+
+
+
+    def load_trajectory(self, file_path):
+        """
+        Load a trajectory data file.
+
+        Args:
+            file_path (str): Path to the saved trajectory file.
+
+        Returns:
+            dict: Loaded trajectory data.
+        """
+        with open(file_path, 'rb') as f:
+            return dill.load(f)
+
 
 
     
