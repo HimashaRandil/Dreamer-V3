@@ -30,7 +30,7 @@ class WorldModel(nn.Module):
             self.continue_predictor = ContinuousPredictor(config, path=path)
 
         self.rssm = RSSM(config)
-        self.decoder = Decoder(config)
+        #self.decoder = Decoder(config)
         self.reward_predictor = RewardPredictor(config)
         self.continue_predictor = ContinuousPredictor(config)
 
@@ -42,13 +42,13 @@ class WorldModel(nn.Module):
         self.device = torch.device(self.config.device)
 
         self.optimizer = optim.Adam([
-                {'params': self.rssm.r_model.parameters()},  
-                {'params': self.rssm.d_model.parameters()},
-                {'params': self.rssm.e_model.parameters()},
-                {'params': self.decoder.parameters()},  
-                {'params': self.reward_predictor.parameters()},
-                {'params': self.continue_predictor.parameters()}
-            ], lr=float(self.config.learning_rate))
+                {'params': self.rssm.r_model.parameters(), 'lr':float(self.config.learning_rate)},  
+                {'params': self.rssm.d_model.parameters(), 'lr':float(self.config.learning_rate)},
+                {'params': self.rssm.e_model.parameters(), 'lr':float(self.config.learning_rate)},
+                {'params': self.rssm.decoder.parameters(), 'lr':float(self.config.learning_rate)},  
+                {'params': self.reward_predictor.parameters(), 'lr':float(self.config.reward_learning_rate)},
+                {'params': self.continue_predictor.parameters(), 'lr':float(self.config.learning_rate)}
+            ])
         
 
         self.to(self.device)
@@ -56,16 +56,15 @@ class WorldModel(nn.Module):
 
 
     def forward(self, obs, hidden_state, action):
-        z_prior, z_posterior, h, dist, dynamic_dist = self.rssm(obs, hidden_state, action)   #Dynamics Predictor: Provides the prior distribution
+        latent_sample, posterior_dist, reconstruct_ob, h, prior_dist, prior_latent_sample = self.rssm(obs, hidden_state, action)   #Dynamics Predictor: Provides the prior distribution
 
-        reconstructed_obs = self.decoder(z_posterior, hidden_state)
-        reward_dist = self.reward_predictor(z_posterior, hidden_state)
-        continue_prob = self.continue_predictor(z_posterior, hidden_state)
+        reward_dist = self.reward_predictor(prior_latent_sample, hidden_state)
+        continue_prob = self.continue_predictor(prior_latent_sample, hidden_state)
 
         return {
-            'prior_dist': dynamic_dist,
-            'posterior_dist': dist,
-            'reconstructed_obs': reconstructed_obs,
+            'prior_dist': prior_dist,
+            'posterior_dist': posterior_dist,
+            'reconstructed_obs': reconstruct_ob,
             'reward_dist': reward_dist,
             'continue_prob': continue_prob,
             'hidden_state': h
@@ -76,21 +75,20 @@ class WorldModel(nn.Module):
         self.rssm.save_rssm()
         self.reward_predictor.save()
         self.continue_predictor.save()
-        self.decoder.save()
         print(f"World Model saved at {self.config.path}")
+
+
 
     def load_world_model(self, custom_path=None):
         if custom_path:
             self.rssm.load_rssm(custom_path=custom_path)
             self.reward_predictor.load(custom_path=custom_path)
             self.continue_predictor.load(custom_path=custom_path)
-            self.decoder.load(custom_path=custom_path)
             print(f"World model loaded at {custom_path}")
         else:
             self.rssm.load_rssm()
             self.reward_predictor.load()
             self.continue_predictor.load()
-            self.decoder.load()
             print(f"World model loaded at {self.config.saved_model_path}")
 
 
@@ -155,10 +153,7 @@ class Trainer:
 
                 # Reward Predictor Loss
                 reward_pred = outputs['reward_dist']
-                std_target = 0.1  # Fixed standard deviation for target rewards
-                target_dist = torch.distributions.Normal(rewards, std_target)
-                reward_loss = torch.distributions.kl_divergence(reward_pred, target_dist).sum(dim=-1).mean()
-                reward_loss = torch.clamp(reward_loss, min=float(self.config.free_bits_threshold))
+                reward_loss = F.mse_loss(reward_pred, rewards)
 
                 #reward_loss = F.mse_loss(reward_pred, rewards)
 

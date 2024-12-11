@@ -68,16 +68,19 @@ class RSSM(nn.Module):
         self.r_model.save()
         self.d_model.save()
         self.e_model.save()
+        self.decoder.save()
 
     def load_rssm(self, custom_path=None):
         if custom_path:
             self.r_model.load(custom_path=custom_path)
             self.e_model.load(custom_path=custom_path)
             self.d_model.load(custom_path=custom_path)
+            self.decoder.load(custom_path=custom_path)
         else:
             self.r_model.load()
             self.e_model.load()
             self.d_model.load()
+            self.decoder.load()
     
 
 
