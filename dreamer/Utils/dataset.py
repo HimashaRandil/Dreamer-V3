@@ -32,6 +32,8 @@ def load_npz_files_from_folder(folder_path, start=0, end=100):
     all_actions = []
     all_dones = []
     all_next_observations = []
+
+    
     folder = os.listdir(folder_path)
     # Iterate through all .npz files in the folder
     for filename in folder[start:end]:
@@ -52,6 +54,11 @@ def load_npz_files_from_folder(folder_path, start=0, end=100):
     actions = np.concatenate(all_actions, axis=0)
     dones = np.concatenate(all_dones, axis=0)
     next_observations = np.concatenate(all_next_observations, axis=0)
+
+
+    reward_min = rewards.min()
+    reward_max = rewards.max()
+    rewards = (rewards - reward_min) / (reward_max - reward_min)
 
     one_hot_actions = one_hot_encode(actions, config.action_dim)
     
