@@ -234,70 +234,91 @@ class Trainer:
         total_recon_loss = 0
         total_reward_loss = 0
         total_continue_loss = 0
-        total_kl_div = 0
-        num_batches = 0
+        total_dynamic_loss = 0
+        total_loss = 0
+
+        kl_weight = self.get_kl_weight(1)
 
         with torch.no_grad():  # Disable gradient computation
-            for obs, actions, rewards, dones, next_obs in data_loader:
-                # Move data to the appropriate device
-                obs, actions, rewards, dones = obs.to(self.config.device), actions.to(self.config.device), rewards.to(self.config.device), dones.to(self.config.device)
-                next_obs = next_obs.to(self.config.device)
+            for loop_count, (obs, rewards, actions, dones, next_obs) in enumerate(data_loader, start=1): 
 
-                # Initialize hidden state and action at t=0
-                hidden_state, action = self.model.rssm.recurrent_model_input_init()
+                obs, rewards, actions, dones, next_obs = obs.to(self.model.device), rewards.to(self.model.device), actions.to(self.model.device), dones.unsqueeze(1).to(self.model.device), next_obs.to(self.model.device)
 
-                # Forward pass through the world model
-                outputs = self.model(obs, hidden_state, action)
-                hidden_state = outputs['h']
+                num_true = dones.sum().item()
+                num_false = dones.numel() - num_true
+                total = num_true + num_false
+                weight_true = total / (2 * num_true) if num_true > 0 else 1.0
+                weight_false = total / (2 * num_false) if num_false > 0 else 1.0
+
+                # Create weights tensor for the batch
+                batch_weights = dones.float() * weight_true + (1 - dones.float()) * weight_false
+
+                hidden_state, _ = self.model.rssm.recurrent_model_input_init()
+                
+                assert torch.isfinite(obs).all(), "obs contains NaN or Inf"
+                assert torch.isfinite(hidden_state).all(), "hidden_state contains NaN or Inf"
+
+                outputs = self.model(obs, hidden_state, actions)
+                #hidden_state = outputs['h']
 
                 # Calculate Posterior (using next_obs with Encoder)
-                z_posterior, posterior_dist = self.model.e_model(torch.cat((next_obs, hidden_state), dim=-1))
+                #z_posterior, posterior_dist = self.model.e_model(torch.cat((next_obs, hidden_state), dim=-1))
 
-                # Reconstruction Loss (Decoder)
+                # Calculate losses
+                # Reconstruction Loss for Decoder
                 reconstructed_obs = outputs['reconstructed_obs']
-                recon_loss = F.mse_loss(reconstructed_obs, obs, reduction='sum')
-                total_recon_loss += recon_loss.item()
+                recon_loss = F.mse_loss(reconstructed_obs, obs)
 
-                # Reward Prediction Loss (MSE)
-                reward_pred = outputs['reward']
-                reward_loss = F.mse_loss(reward_pred, rewards, reduction='sum')
-                total_reward_loss += reward_loss.item()
+                # Reward Predictor Loss
+                reward_pred = outputs['reward_dist']
+                reward_loss = F.mse_loss(reward_pred, rewards)
+
+                #reward_loss = F.mse_loss(reward_pred, rewards)
 
                 # Continue Predictor Loss (Binary Cross-Entropy)
                 continue_pred = outputs['continue_prob']
-                continue_loss = F.binary_cross_entropy_with_logits(continue_pred, dones.float(), reduction='sum')
-                total_continue_loss += continue_loss.item()
+                continue_loss = F.binary_cross_entropy_with_logits(
+                            continue_pred, dones, weight=batch_weights)
 
                 # KL Divergence Loss
-                #posterior_dist = outputs['posterior_dist']
+                posterior_dist = outputs['posterior_dist']
                 prior_dist = outputs['prior_dist']
-                kl_div = torch.distributions.kl_divergence(posterior_dist, prior_dist).mean()
-                total_kl_div += kl_div.item()
 
-                # Increment the batch counter
-                num_batches += 1
 
-        # Calculate average metrics
-        avg_recon_loss = total_recon_loss / len(data_loader.dataset)
-        avg_reward_loss = total_reward_loss / len(data_loader.dataset)
-        avg_continue_loss = total_continue_loss / len(data_loader.dataset)
-        avg_kl_div = total_kl_div / num_batches
+                dynamic_loss = torch.distributions.kl_divergence(posterior_dist, prior_dist).sum(dim=-1).mean()
+                
+                #print(f"reconstruct: {recon_loss}")
+                #print(f"reward : {reward_loss}")
+                #print(f"Continue : {continue_loss}")
+                #print(f"kl weight : {self.config.kl_weight}")
+                # Total Loss
+                batch_total_loss = recon_loss + reward_loss + continue_loss + (kl_weight * dynamic_loss) * 2
+                
+                total_recon_loss += recon_loss.item()
+                total_reward_loss += reward_loss.item()
+                total_continue_loss += continue_loss.item()
+                total_dynamic_loss += dynamic_loss.item()
+                total_loss += batch_total_loss.item()  
 
-        # Print or log metrics
-        print(f"Evaluation - Recon Loss: {avg_recon_loss:.4f}, Reward Loss: {avg_reward_loss:.4f}, Continue Loss: {avg_continue_loss:.4f}, KL Divergence: {avg_kl_div:.4f}")
 
-        # Return metrics as a dictionary
-        return {
-            'recon_loss': avg_recon_loss,
-            'reward_loss': avg_reward_loss,
-            'continue_loss': avg_continue_loss,
-            'kl_divergence': avg_kl_div
-        }
-    
+            avg_recon_loss = total_recon_loss / loop_count
+            avg_reward_loss = total_reward_loss / loop_count
+            avg_continue_loss = total_continue_loss / loop_count
+            avg_dynamic_loss = total_dynamic_loss / loop_count
+            avg_total_loss = total_loss / loop_count
 
-    def evaluate_with_grid(self):
-        env = grid2op.make(self.config.env_name, reward_class=L2RPNSandBoxScore,
-                                backend=LightSimBackend())
+
+            print(
+            f"Avg Total Loss = {avg_total_loss:.4f}, "
+            f"Avg Recon Loss = {avg_recon_loss:.4f}, "
+            f"Avg Reward Loss = {avg_reward_loss:.4f}, "
+            f"Avg Continue Loss = {avg_continue_loss:.4f}, "
+            f"Avg Dynamic KL Loss = {avg_dynamic_loss:.4f}, "
+        )
+
+
+
+
         
     
     
