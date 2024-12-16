@@ -122,6 +122,8 @@ class ActorCritic:
     
     def update_critic(self, states: torch.Tensor, actions: torch.Tensor, lambda_returns: torch.Tensor) -> float:
         """Update critic using discrete regression with twohot targets."""
+        print("States Shape in update critic", states.shape)
+
         # Transform and encode targets
         transformed_returns = self.symlog(lambda_returns)
         target_distribution = self.twohot_encode(transformed_returns)
