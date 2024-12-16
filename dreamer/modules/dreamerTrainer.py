@@ -29,6 +29,7 @@ class DreamerTrainer:
         self.world_model = world_model
         self.actor_critic = actor_critic
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.env = grid2op.make(
             self.config.env_name,  
             reward_class=L2RPNSandBoxScore,
@@ -41,6 +42,7 @@ class DreamerTrainer:
             sequence_length=self.config.horizon
         )
 
+    
 
     def imagine_trajectory(self,initial_state:torch.tensor):
 
@@ -67,16 +69,16 @@ class DreamerTrainer:
 
 
             current_h, _ = self.world_model.rssm.recurrent_model_input_init(batch=1)  # Initial hidden state
-            print(current_h.shape)
+            # print(current_h.shape)
 
             initial_state = initial_state.unsqueeze(0).to(self.world_model.device)
-            print(initial_state.shape)
-            print(current_h.shape)
+            # print(initial_state.shape)
+            # print(current_h.shape)
             initial_state = torch.cat([initial_state,current_h],dim=-1)
                 
             # print(initial_state.shape)
             current_z, _ = self.world_model.rssm.e_model(initial_state)
-            print(current_z.shape)
+            # print(current_z.shape)
             
             for t in range(self.config.horizon):
                 # Store current states
@@ -99,7 +101,7 @@ class DreamerTrainer:
                 reward = self.world_model.reward_predictor(next_z_prior, next_h)  # Using mean of prior
                 cont = self.world_model.continue_predictor(next_z_prior, next_h)
                 
-                rewards.append(reward.sample().detach())
+                rewards.append(reward.detach())
                 continues.append(cont.detach())
                 
                 # Update states for next step
@@ -117,26 +119,34 @@ class DreamerTrainer:
         )
         states = torch.stack([torch.cat([z.clone().detach(), h.clone().detach()], dim=-1) for z, h in zip(latent_states, hidden_states)])
         actions = torch.stack([self.actor_critic.one_hot_encode(a).clone().detach() for a in actions])
-        rewards = torch.stack([r.clone().detach() for r in rewards])
+        rewards = torch.stack([r.clone().detach() for r in rewards])        
         continues = torch.stack([c.clone().detach() for c in continues])
+
+        # Print shape debugging information
+        logging.debug(f"States shape: {states.shape}")
+        logging.debug(f"Actions shape: {actions.shape}")
+        logging.debug(f"States device: {states.device}")
+        logging.debug(f"Actions device: {actions.device}")
+
+        
 
         values = []
 
         for t in range(states.size(0)):
-            print("shape of State: ", states[t].shape)
-            print("shape of Actiion: ", actions[t].shape)
+            # print("shape of State: ", states[t].shape)
+            # print("shape of Actiion: ", actions[t].shape)
             value, _ = self.actor_critic.critic(states[t], actions[t])
             values.append(value)
         values = torch.stack(values)
-        print("shape of Values", values.shape)
+        # print("shape of Values", values.shape)
 
         # Compute λ-returns
         lambda_returns = self.actor_critic.compute_lambda_returns(rewards, values, continues)
-        print("shape of lambda Returns ", lambda_returns.shape)
+        # print("shape of lambda Returns ", lambda_returns.shape)
 
         # Update from imagined trajectory (scale = 1.0)
         critic_loss_imagine = self.actor_critic.update_critic(states, actions, lambda_returns)
-        print("Critic_loss_imagine: ", critic_loss_imagine)
+        # print("Critic_loss_imagine: ", critic_loss_imagine)
 
         # Get replay buffer data and compute returns
         batch_size = replay_buffer_batch['states'].size(0)  # 32
@@ -153,7 +163,7 @@ class DreamerTrainer:
         replay_states, 
         replay_actions
         )
-        print('Replay Values : ' , replay_values)
+        # print('Replay Values : ' , replay_values)
 
         
         # Reshape values back to [batch_size, seq_len, 1]
@@ -176,16 +186,16 @@ class DreamerTrainer:
         replay_actions,
         replay_lambda_returns.view(-1, 1)  # Flatten lambda returns to match states/actions
         )
-        print("Replay Critic Loss : ", critic_loss_replay)
+        # print("Replay Critic Loss : ", critic_loss_replay)
         
         # Update actor using imagined trajectories
         actor_loss = self.actor_critic.update_actor(states, actions, lambda_returns)
-        print("Actor Loss : ", actor_loss)
+        # print("Actor Loss : ", actor_loss)
 
         return {
             'actor_loss': actor_loss,
-            'critic_loss_imagine': critic_loss_imagine,
-            'critic_loss_replay': critic_loss_replay,
+            'critic_imagine_loss': critic_loss_imagine,
+            'critic_replay_loss': critic_loss_replay,
             'mean_return': lambda_returns.mean().item(),
         }
     
@@ -201,32 +211,34 @@ class DreamerTrainer:
             steps_per_epoch: Number of training steps per epoch
         """
 
-        self.world_model.load_world_model()
-        self.replay_buffer = self.initialize_buffer(num_trajectories=3200)
+        # self.world_model.load_world_model()
+        logging.info(f"{self.__class__.__name__}.{__name__}: Buffer Initializing...")
+        self.initialize_buffer(num_trajectories=3200)
 
 
         # Training metrics
         metrics = {
-            'actor_losses': [],
-            'critic_imagine_losses': [],
-            'critic_replay_losses': [],
-            'mean_returns': []
+            'actor_loss': [],
+            'critic_imagine_loss': [],
+            'critic_replay_loss': [],
+            'mean_return': []
         }
         logging.info(f"{self.__class__.__name__}.{__name__}: Starting actor-critic training...")
 
         for epoch in range(num_epochs):
             # Initialize epoch metrics
             epoch_metrics = {
-                'actor_losses': [],
-                'critic_imagine_losses': [],
-                'critic_replay_losses': [],
-                'mean_returns': []
+                'actor_loss': [],
+                'critic_imagine_loss': [],
+                'critic_replay_loss': [],
+                'mean_return': []
             }
             
             # Steps within each epoch
             for step in range(steps_per_epoch):
                 # Sample batch from replay buffer
                 batch = self.replay_buffer.get_sample(batch_size, device=self.device)
+                
 
                 
                 # Get initial observation from Grid2Op
@@ -236,6 +248,7 @@ class DreamerTrainer:
                 obs = obs.to_vect()
                 obs = torch.tensor(obs)
 
+                logging.info(f"{self.__class__.__name__}.{__name__}: Training Step...")
                 # Perform training step
                 step_results = self.train_step(
                     initial_state=obs,
@@ -244,12 +257,12 @@ class DreamerTrainer:
 
                 # Add new trajectory occasionally (every 10 steps)
                 if step % 10 == 0:
-                    self.initialize_buffer(num_trajectories=1)  # Add one new trajectory
+                    self.initialize_buffer(num_trajectories=10)  # Add one new trajectory
                     logging.info(f"Added new trajectory at step {step}. Buffer size: {len(self.replay_buffer)}")
 
                 # Collect metrics
                 for key in epoch_metrics:
-                    epoch_metrics[key].append(step_results[key.replace('losses', 'loss')])
+                    epoch_metrics[key].append(step_results[key])
 
             # Compute epoch averages
             epoch_mean_metrics = {
@@ -264,10 +277,10 @@ class DreamerTrainer:
             # Log progress every N epochs
             if epoch % 10 == 0:
                 logging.info(f"\nEpoch {epoch+1}/{num_epochs}")
-                logging.info(f"Actor Loss: {epoch_mean_metrics['actor_losses']:.4f}")
-                logging.info(f"Critic Imagine Loss: {epoch_mean_metrics['critic_imagine_losses']:.4f}")
-                logging.info(f"Critic Replay Loss: {epoch_mean_metrics['critic_replay_losses']:.4f}")
-                logging.info(f"Mean Return: {epoch_mean_metrics['mean_returns']:.4f}")
+                logging.info(f"Actor Loss: {epoch_mean_metrics['actor_loss']:.4f}")
+                logging.info(f"Critic Imagine Loss: {epoch_mean_metrics['critic_imagine_loss']:.4f}")
+                logging.info(f"Critic Replay Loss: {epoch_mean_metrics['critic_replay_loss']:.4f}")
+                logging.info(f"Mean Return: {epoch_mean_metrics['mean_return']:.4f}")
                 
             # Save checkpoints periodically
             if epoch % 100 == 0:

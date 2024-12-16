@@ -110,6 +110,14 @@ class ActorCritic:
             raise ValueError(f"Shape mismatch: rewards {rewards.shape}, values {values.shape}, "
                            f"continues {continues.shape}")
         
+        # Scale rewards to prevent extreme values
+        reward_scale = rewards.abs().mean().item()
+        if reward_scale > 1:
+            rewards = rewards / reward_scale
+            values = values / reward_scale
+
+
+        
         lambda_returns = torch.zeros_like(rewards)
         # Handle the final step: R^λ_T = vT
         lambda_returns[-1] = values[-1]
@@ -117,15 +125,20 @@ class ActorCritic:
         for t in reversed(range(len(values)- 1)):
             bootstrap = (1 - self.lambda_gae) * values[t] + self.lambda_gae * lambda_returns[t + 1]
             lambda_returns[t] = rewards[t] + self.gamma * continues[t] * bootstrap
+
+        # Rescale returns if we scaled rewards
+        if reward_scale > 1:
+            lambda_returns = lambda_returns * reward_scale
             
         return lambda_returns
+   
     
     def update_critic(self, states: torch.Tensor, actions: torch.Tensor, lambda_returns: torch.Tensor) -> float:
         """Update critic using discrete regression with twohot targets."""
-        print("States Shape in update critic", states.shape)
+        # print("States Shape in update critic", states.shape)
 
         # Transform and encode targets
-        transformed_returns = self.symlog(lambda_returns)
+        transformed_returns = self.symlog(lambda_returns.clamp(-1e6, 1e6))
         target_distribution = self.twohot_encode(transformed_returns)
         
         # Get critic predictions
@@ -140,6 +153,7 @@ class ActorCritic:
         
         self.critic_optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)  # Add gradient clipping
         self.critic_optimizer.step()
 
         # Update target network
@@ -161,7 +175,7 @@ class ActorCritic:
             actions: Real actions from replay buffer
             lambda_returns: Computed returns from real trajectories
         """
-        transformed_returns = self.symlog(lambda_returns)
+        transformed_returns = self.symlog(lambda_returns.clamp(-1e6, 1e6))
         target_distribution = self.twohot_encode(transformed_returns)
         
         value_logits = self.critic.get_value_distribution(states, actions)
@@ -200,31 +214,38 @@ class ActorCritic:
         lambda_returns: torch.Tensor
     ) -> float:
         """Update actor using normalized returns and entropy regularization."""
-        # Normalize returns
+        """Update actor with robust normalization."""
+        # Get value estimates for advantage computation
+        values, _ = self.critic(states, actions)
+        values = self.symexp(values)  # Convert back from symlog space
+        
+        # Compute advantages
+        advantages = lambda_returns - values.detach()
+        
+        # Robust normalization
         if self.return_ema is None:
-            self.return_ema = lambda_returns.mean()
-            self.return_std = max(lambda_returns.std(), 1e-6)
+            self.return_ema = advantages.mean()
+            self.return_std = advantages.std().clamp(min=1.0)
         else:
-            self.return_ema = 0.99 * self.return_ema + 0.01 * lambda_returns.mean()
-            self.return_std = max(0.99 * self.return_std + 0.01 * lambda_returns.std(), 1e-6)
+            self.return_ema = 0.99 * self.return_ema + 0.01 * advantages.mean()
+            self.return_std = (0.99 * self.return_std + 0.01 * advantages.std()).clamp(min=1.0)
         
-        normalized_returns = lambda_returns / torch.max(
-            torch.ones_like(lambda_returns),
-            lambda_returns.abs() / self.return_std
-        )
+        # Normalize advantages with clipping
+        normalized_advantages = (advantages - self.return_ema) / self.return_std
+        normalized_advantages = normalized_advantages.clamp(-10.0, 10.0)
         
-        # Get action distribution
+        # Get action distribution and compute loss
         action_logits = self.actor(states)
         log_probs, entropy, _ = self.actor.evaluate_actions(action_logits, actions)
         
-        # Compute actor loss
-        policy_loss = -(log_probs * normalized_returns.detach()).mean()
+        # Compute actor loss with clipped advantages
+        policy_loss = -(log_probs * normalized_advantages.detach()).mean()
         entropy_loss = -entropy.mean()
         actor_loss = policy_loss - self.entropy_scale * entropy_loss
         
-        # Update actor
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)  # Add gradient clipping
         self.actor_optimizer.step()
         
         return actor_loss.item()
