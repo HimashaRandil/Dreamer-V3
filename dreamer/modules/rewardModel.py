@@ -26,7 +26,8 @@ class RewardPredictor(nn.Module):
             nn.ReLU(),
             nn.Linear(32, 16),
             nn.ReLU(),
-            nn.Linear(16, 2)
+            nn.Linear(16, 1),
+            nn.Sigmoid()
         )
 
         if kwargs.get('path'):
@@ -36,14 +37,7 @@ class RewardPredictor(nn.Module):
         x = torch.cat([latent_dim, hidden_dim], dim=-1)
         x = self.network(x)
         
-        # Split the output into mean and log-variance
-        mean, log_var = x.chunk(2, dim=-1)
-        
-        log_var = torch.clamp(log_var, min=-10, max=10) # for avoid nan value return and numerical stability
-        std = torch.exp(0.5 * log_var)
-        dist = torch.distributions.Normal(mean, std)
-        
-        return dist
+        return x
     
     def save(self, model_name="reward_predictor"):
         torch.save(self.state_dict(), os.path.join(self.config.path, model_name))
