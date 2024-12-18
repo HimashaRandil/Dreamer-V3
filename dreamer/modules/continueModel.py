@@ -23,12 +23,12 @@ class ContinuousPredictor(nn.Module):
             self.config.path = kwargs.get('path')
 
 
-    def forward(self, latent_dim, hidden_dim):
+    def forward(self, latent_dim, hidden_dim, threshold=False):
         x = torch.cat((latent_dim, hidden_dim), dim=-1)
         x = self.network(x)
-
-        dist = torch.distributions.Bernoulli(logits=x)   #Bernoulli distribution is a natural choice for modeling binary events
-        return dist.sample()
+        
+        #dist = torch.distributions.Bernoulli(logits=x)   #Bernoulli distribution is a natural choice for modeling binary events
+        return x
     
 
     def save(self, model_name="continue_predictor"):
