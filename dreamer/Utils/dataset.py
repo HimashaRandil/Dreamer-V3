@@ -3,6 +3,7 @@ import os
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from dreamer.Utils.utils import Config
+from dreamer.Utils.logger import logging
 
 
 config = Config.from_yaml('config.yml')
@@ -59,6 +60,7 @@ def load_npz_files_from_folder(folder_path, start=0, end=100):
     reward_min = rewards.min()
     reward_max = rewards.max()
     rewards = (rewards - reward_min) / (reward_max - reward_min)
+    logging.info(f"reward min : {reward_min} - reward max : {reward_max}")
 
     one_hot_actions = one_hot_encode(actions, config.action_dim)
     
